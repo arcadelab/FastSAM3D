@@ -1,0 +1,19 @@
+Collecting jax
+  Downloading jax-0.4.23-py3-none-any.whl.metadata (24 kB)
+Collecting ml-dtypes>=0.2.0 (from jax)
+  Downloading ml_dtypes-0.3.2-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (20 kB)
+Requirement already satisfied: numpy>=1.22 in /opt/anaconda3/envs/lightingsam/lib/python3.9/site-packages (from jax) (1.26.3)
+Collecting opt-einsum (from jax)
+  Downloading opt_einsum-3.3.0-py3-none-any.whl (65 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 65.5/65.5 kB 7.0 MB/s eta 0:00:00
+Requirement already satisfied: scipy>=1.9 in /opt/anaconda3/envs/lightingsam/lib/python3.9/site-packages (from jax) (1.12.0)
+Collecting importlib-metadata>=4.6 (from jax)
+  Downloading importlib_metadata-7.0.1-py3-none-any.whl.metadata (4.9 kB)
+Requirement already satisfied: zipp>=0.5 in /opt/anaconda3/envs/lightingsam/lib/python3.9/site-packages (from importlib-metadata>=4.6->jax) (3.17.0)
+Downloading jax-0.4.23-py3-none-any.whl (1.7 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.7/1.7 MB 11.2 MB/s eta 0:00:00
+Downloading importlib_metadata-7.0.1-py3-none-any.whl (23 kB)
+Downloading ml_dtypes-0.3.2-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (2.2 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2.2/2.2 MB 11.1 MB/s eta 0:00:00
+Installing collected packages: opt-einsum, ml-dtypes, importlib-metadata, jax
+Successfully installed importlib-metadata-7.0.1 jax-0.4.23 ml-dtypes-0.3.2 opt-einsum-3.3.0
