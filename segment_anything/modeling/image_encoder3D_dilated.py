@@ -7,7 +7,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import time
+
 from typing import Optional, Tuple, Type
 
 class MLPBlock(nn.Module):
@@ -48,8 +48,9 @@ class ImageEncoderViT3D(nn.Module):
         patch_size: int = 16,
         in_chans: int = 1,
         embed_dim: int = 768,
-        depth: int = 12,
+        depth: int = 6,  
         num_heads: int = 12,
+        dilation_rates: Tuple[int, ...] = (2,) * 6,  
         mlp_ratio: float = 4.0,
         out_chans: int = 256,
         qkv_bias: bool = True,
@@ -64,7 +65,7 @@ class ImageEncoderViT3D(nn.Module):
     ) -> None:
         """
         Args:
-            img_size (int): Input image size.qq
+            img_size (int): Input image size.
             patch_size (int): Patch size.
             in_chans (int): Number of input image channels.
             embed_dim (int): Patch embedding dimension.
@@ -99,9 +100,11 @@ class ImageEncoderViT3D(nn.Module):
 
         self.blocks = nn.ModuleList()
         for i in range(depth):
+            dilation_rate = dilation_rates[i] if i < len(dilation_rates) else 1
             block = Block3D(
                 dim=embed_dim,
                 num_heads=num_heads,
+                dilation_rate=dilation_rate,  
                 mlp_ratio=mlp_ratio,
                 qkv_bias=qkv_bias,
                 norm_layer=norm_layer,
@@ -136,7 +139,6 @@ class ImageEncoderViT3D(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # input_size = [1,1,256,256,256]
         # import IPython; IPython.embed()
-        t = time.time()
         listx = []
         x = self.patch_embed(x)
         
@@ -156,7 +158,7 @@ class ImageEncoderViT3D(nn.Module):
         x = self.neck(x.permute(0, 4, 1, 2, 3))
         listx.append(x)
         # output_size = [1,256,16,16,16]
-        return listx,time.time()-t
+        return listx
 
 
 class Block3D(nn.Module):
@@ -166,6 +168,7 @@ class Block3D(nn.Module):
         self,
         dim: int,
         num_heads: int,
+        dilation_rate: int = 2,
         mlp_ratio: float = 4.0,
         qkv_bias: bool = True,
         norm_layer: Type[nn.Module] = nn.LayerNorm,
@@ -195,6 +198,7 @@ class Block3D(nn.Module):
         self.attn = Attention(
             dim,
             num_heads=num_heads,
+            dilation_rate=dilation_rate,
             qkv_bias=qkv_bias,
             use_rel_pos=use_rel_pos,
             rel_pos_zero_init=rel_pos_zero_init,
@@ -235,6 +239,7 @@ class Attention(nn.Module):
         dim: int,
         num_heads: int = 8,
         qkv_bias: bool = True,
+        dilation_rate: int = 2,  
         use_rel_pos: bool = False,
         rel_pos_zero_init: bool = True,
         input_size: Optional[Tuple[int, int, int]] = None,
@@ -251,6 +256,7 @@ class Attention(nn.Module):
         """
         super().__init__()
         self.num_heads = num_heads
+        self.dilation_rate = dilation_rate
         head_dim = dim // num_heads
         self.scale = head_dim**-0.5
 
@@ -268,19 +274,27 @@ class Attention(nn.Module):
             self.rel_pos_w = nn.Parameter(torch.zeros(2 * input_size[2] - 1, head_dim))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        B, D, H, W, _ = x.shape
-        # qkv with shape (3, B, nHead, H * W, C)
-        qkv = self.qkv(x).reshape(B, D * H * W, 3, self.num_heads, -1).permute(2, 0, 3, 1, 4)
-        # q, k, v with shape (B * nHead, H * W, C)
+        B, D, H, W, C = x.shape
+        # Reshape qkv to (3, B, num_heads, D * H * W, head_dim)
+        qkv = self.qkv(x).reshape(B, D * H * W, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
         q, k, v = qkv.reshape(3, B * self.num_heads, D * H * W, -1).unbind(0)
 
+        # Apply dilation on key and value
+        if self.dilation_rate > 1:
+            # Calculate new shape after dilation
+            new_D, new_H, new_W = D // self.dilation_rate, H // self.dilation_rate, W // self.dilation_rate
+            # Reshape k and v to reflect the spatial dimensions (D, H, W)
+            k = k.reshape(B * self.num_heads, D, H, W, -1)[:, ::self.dilation_rate, ::self.dilation_rate, ::self.dilation_rate, :].reshape(B * self.num_heads, new_D * new_H * new_W, -1)
+            v = v.reshape(B * self.num_heads, D, H, W, -1)[:, ::self.dilation_rate, ::self.dilation_rate, ::self.dilation_rate, :].reshape(B * self.num_heads, new_D * new_H * new_W, -1)
+        
         attn = (q * self.scale) @ k.transpose(-2, -1)
 
         if self.use_rel_pos:
-            attn = add_decomposed_rel_pos(attn, q, self.rel_pos_d, self.rel_pos_h, self.rel_pos_w, (D, H, W), (D, H, W))
+            # Adjust the relative positions based on the dilated size
+            attn = add_decomposed_rel_pos(attn, q, self.rel_pos_d, self.rel_pos_h, self.rel_pos_w, (D, H, W), (new_D, new_H, new_W), self.dilation_rate)
 
         attn = attn.softmax(dim=-1)
-        x = (attn @ v).view(B, self.num_heads, D, H, W, -1).permute(0, 2, 3, 4, 1, 5).reshape(B, D, H, W, -1)
+        x = (attn @ v).reshape(B, self.num_heads, new_D, new_H, new_W, -1).permute(0, 2, 3, 4, 1, 5).reshape(B, new_D, new_H, new_W, -1)
         x = self.proj(x)
 
         return x
@@ -337,7 +351,7 @@ def window_unpartition3D(
     return x
 
 
-def get_rel_pos(q_size: int, k_size: int, rel_pos: torch.Tensor) -> torch.Tensor:
+def get_rel_pos(q_size: int, k_size: int, dilation_rates: int, rel_pos: torch.Tensor) -> torch.Tensor:
     """
     Get relative positional embeddings according to the relative positions of
         query and key sizes.
@@ -349,10 +363,13 @@ def get_rel_pos(q_size: int, k_size: int, rel_pos: torch.Tensor) -> torch.Tensor
     Returns:
         Extracted positional embeddings according to relative positions.
     """
-    max_rel_dist = int(2 * max(q_size, k_size) - 1)
+    # Adjust the key size to reflect dilation
+    dilated_k_size = (k_size + dilation_rates - 1) // dilation_rates  # Calculate the new size after dilation
+
+    max_rel_dist = int(2 * max(q_size, dilated_k_size) - 1)
+
     # Interpolate rel pos if needed.
     if rel_pos.shape[0] != max_rel_dist:
-        # Interpolate rel pos.
         rel_pos_resized = F.interpolate(
             rel_pos.reshape(1, rel_pos.shape[0], -1).permute(0, 2, 1),
             size=max_rel_dist,
@@ -362,10 +379,10 @@ def get_rel_pos(q_size: int, k_size: int, rel_pos: torch.Tensor) -> torch.Tensor
     else:
         rel_pos_resized = rel_pos
 
-    # Scale the coords with short length if shapes for q and k are different.
-    q_coords = torch.arange(q_size)[:, None] * max(k_size / q_size, 1.0)
-    k_coords = torch.arange(k_size)[None, :] * max(q_size / k_size, 1.0)
-    relative_coords = (q_coords - k_coords) + (k_size - 1) * max(q_size / k_size, 1.0)
+    # Generate coordinates considering dilation
+    q_coords = torch.arange(q_size)[:, None]
+    dilated_k_coords = torch.arange(0, k_size, dilation_rates)[None, :]  # Only select positions that are dilation_rate apart
+    relative_coords = (q_coords - dilated_k_coords) + (dilated_k_size - 1)
 
     return rel_pos_resized[relative_coords.long()]
 
@@ -378,6 +395,7 @@ def add_decomposed_rel_pos(
     rel_pos_w: torch.Tensor,
     q_size: Tuple[int, int, int],
     k_size: Tuple[int, int, int],
+    dilation_rates: int
 ) -> torch.Tensor:
     """
     Calculate decomposed Relative Positional Embeddings from :paper:`mvitv2`.
@@ -396,10 +414,11 @@ def add_decomposed_rel_pos(
     q_d, q_h, q_w = q_size
     k_d, k_h, k_w = k_size
 
-    Rd = get_rel_pos(q_d, k_d, rel_pos_d)
-    Rh = get_rel_pos(q_h, k_h, rel_pos_h)
-    Rw = get_rel_pos(q_w, k_w, rel_pos_w)
-    
+    stride = dilation_rates
+    Rd = get_rel_pos(q_d, k_d // stride, stride, rel_pos_d)[::stride]
+    Rh = get_rel_pos(q_h, k_h // stride, stride, rel_pos_h)[::stride]
+    Rw = get_rel_pos(q_w, k_w // stride, stride, rel_pos_w)[::stride]
+
     B, _, dim = q.shape
     r_q = q.reshape(B, q_d, q_h, q_w, dim)
 

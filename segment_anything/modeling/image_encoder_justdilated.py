@@ -61,6 +61,7 @@ class ImageEncoderViT3D(nn.Module):
         window_size: int = 0,
         global_attn_indexes: Tuple[int, ...] = (),
         layeroutput = 2,
+        skip_layer = 2
     ) -> None:
         """
         Args:
@@ -98,7 +99,20 @@ class ImageEncoderViT3D(nn.Module):
             )
 
         self.blocks = nn.ModuleList()
-        for i in range(depth):
+        for i in range(skip_layer):
+            self.blocks.append(Block3D_woatt(
+                dim=embed_dim,
+                num_heads=num_heads,
+                mlp_ratio=mlp_ratio,
+                qkv_bias=qkv_bias,
+                norm_layer=norm_layer,
+                act_layer=act_layer,
+                use_rel_pos=use_rel_pos,
+                rel_pos_zero_init=rel_pos_zero_init,
+                window_size=window_size if i not in global_attn_indexes else 0,
+                input_size=(img_size // patch_size, img_size // patch_size, img_size // patch_size),
+        ))
+        for i in range(depth-skip_layer):
             block = Block3D(
                 dim=embed_dim,
                 num_heads=num_heads,
@@ -147,10 +161,7 @@ class ImageEncoderViT3D(nn.Module):
         listx.append(x)
         i = 0
         for blk in self.blocks:
-            i += 1
-            x,x1 = blk(x)
-            if i % self.layeroutput == 0:
-                listx.append(x1)
+            x = blk(x)
             
         # x = [1,16,16,16,768]
         x = self.neck(x.permute(0, 4, 1, 2, 3))
@@ -224,9 +235,61 @@ class Block3D(nn.Module):
         
         x = x + self.mlp(x)
 
-        return x,x1
+        return x
 
+class Block3D_woatt(nn.Module):
+    """Transformer blocks with support of window attention and residual propagation blocks"""
 
+    def __init__(
+        self,
+        dim: int,
+        num_heads: int,
+        mlp_ratio: float = 4.0,
+        qkv_bias: bool = True,
+        norm_layer: Type[nn.Module] = nn.LayerNorm,
+        act_layer: Type[nn.Module] = nn.GELU,
+        use_rel_pos: bool = False,
+        rel_pos_zero_init: bool = True,
+        window_size: int = 0,
+        input_size: Optional[Tuple[int, int, int]] = None,
+    ) -> None:
+        """
+        Args:
+            dim (int): Number of input channels.
+            num_heads (int): Number of attention heads in each ViT block.
+            mlp_ratio (float): Ratio of mlp hidden dim to embedding dim.
+            qkv_bias (bool): If True, add a learnable bias to query, key, value.
+            norm_layer (nn.Module): Normalization layer.
+            act_layer (nn.Module): Activation layer.
+            use_rel_pos (bool): If True, add relative positional embeddings to the attention map.
+            rel_pos_zero_init (bool): If True, zero initialize relative positional parameters.
+            window_size (int): Window size for window attention blocks. If it equals 0, then
+                use global attention.
+            input_size (tuple(int, int) or None): Input resolution for calculating the relative
+                positional parameter size.
+        """
+        super().__init__()
+        # self.norm1 = norm_layer(dim)
+        # self.attn = Attention(
+        #     dim,
+        #     num_heads=num_heads,
+        #     qkv_bias=qkv_bias,
+        #     use_rel_pos=use_rel_pos,
+        #     rel_pos_zero_init=rel_pos_zero_init,
+        #     input_size=input_size if window_size == 0 else (window_size, window_size, window_size),
+        # )
+
+        self.norm2 = norm_layer(dim)
+        self.mlp = MLPBlock(embedding_dim=dim, mlp_dim=int(dim * mlp_ratio), act=act_layer)
+
+        self.window_size = window_size
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = self.norm2(x)
+        
+        x = x + self.mlp(x)
+
+        return x
 class Attention(nn.Module):
     """Multi-head Attention block with relative position embeddings."""
 
@@ -269,6 +332,12 @@ class Attention(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         B, D, H, W, _ = x.shape
+        x_dilated = x[:, ::4, ::4, ::4, :]
+        _, d_dilated, h_dilated, w_dilated, _ = x_dilated.shape
+        padding_depth = D - d_dilated
+        padding_height = H - h_dilated
+        padding_width = W - w_dilated
+        x = F.pad(x_dilated, (0, 0, 0, padding_width, 0, padding_height, 0, padding_depth))
         # qkv with shape (3, B, nHead, H * W, C)
         qkv = self.qkv(x).reshape(B, D * H * W, 3, self.num_heads, -1).permute(2, 0, 3, 1, 4)
         # q, k, v with shape (B * nHead, H * W, C)

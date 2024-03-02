@@ -15,13 +15,13 @@ from typing import List, Tuple, Type
 
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
-
+import time
 import torch
 from torch import Tensor, nn
 
 import math
 from typing import Tuple, Type
-
+from flash_attn import flash_attn_qkvpacked_func, flash_attn_func
 
 class MLPBlock3D(nn.Module):
     def __init__(
@@ -205,7 +205,9 @@ class TwoWayAttentionBlock3D(nn.Module):
         keys = self.norm4(keys)
 
         return queries, keys
-
+# def apply_dilation(x, dilation_rate=4):
+      
+#     return x[:, ::dilation_rate, :]
 
 class Attention(nn.Module):
     """
@@ -240,33 +242,40 @@ class Attention(nn.Module):
         x = x.transpose(1, 2)
         return x.reshape(b, n_tokens, n_heads * c_per_head)  # B x N_tokens x C
 
+
     def forward(self, q: Tensor, k: Tensor, v: Tensor) -> Tensor:
+        batch_size, seq_len, _ = q.shape
+        # q_dilated = apply_dilation(q, dilation_rate=4)
+        # k_dilated = apply_dilation(k, dilation_rate=4)
+        # v_dilated = apply_dilation(v, dilation_rate=4)
         # Input projections
         q = self.q_proj(q)
         k = self.k_proj(k)
         v = self.v_proj(v)
-        # print("before v.shape")
+        print("before q shape", q.shape)
         # Separate into heads
         q = self._separate_heads(q, self.num_heads)
         k = self._separate_heads(k, self.num_heads)
         v = self._separate_heads(v, self.num_heads)
-        # print("head v", v.shape)
-        # Attention
-        _, _, _, c_per_head = q.shape
-        attn = q @ k.permute(0, 1, 3, 2)  # B x N_heads x N_tokens x N_tokens
-        attn = attn / math.sqrt(c_per_head)
-        attn = torch.softmax(attn, dim=-1)
-        # print("attn shape",attn.shape)
-        # Get output
-        out = attn @ v
-        # print(out.shape)
-        out = self._recombine_heads(out)
-        # print(out.shape)
-        out = self.out_proj(out)
-        # print(out.shape)
+        q=q.permute(0, 2, 1, 3)
+        k=k.permute(0, 2, 1, 3)
+        v=v.permute(0, 2, 1, 3)
+        print("q shape",q.shape)
+        #B,head,seqlen,embdimm
+       
+        #q,k,v = q.reshape(batch_size, new_seq_length,self.heads, -1),k.reshape(batch_size, new_seq_length, self.heads, -1),v.reshape(batch_size, new_seq_length, self.heads, -1)
+        q, k, v = q.half(), k.half(), v.half()
+        attn=flash_attn_func(q, k, v, dropout_p=0.0, softmax_scale=None, causal=False)
+        attn=attn.float()
+        print("attn shape",attn.shape)
+        print("v shape",v.shape)
+        attn_out = attn.transpose(2, 3).contiguous().view(batch_size, seq_len, -1)  # B, S, (N*H)
 
-        return out
-
+        # 如果需要，通过一个线性层调整维度
+        # 假设self.out_proj是一个线性层，已经在__init__中以适当的输出维度初始化
+        attn_out = self.out_proj(attn_out)  # B, S, embedding_dim
+        return attn_out
+    
 
 
 class LayerNorm3d(nn.Module):
@@ -352,7 +361,7 @@ class MaskDecoder3D(nn.Module):
         sparse_prompt_embeddings: torch.Tensor,
         dense_prompt_embeddings: torch.Tensor,
         multimask_output: bool,
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    ) -> Tuple[torch.Tensor, torch.Tensor,float]:
         """
         Predict masks given image and prompt embeddings.
 
@@ -368,6 +377,7 @@ class MaskDecoder3D(nn.Module):
           torch.Tensor: batched predicted masks
           torch.Tensor: batched predictions of mask quality
         """
+        t=time.time()
         masks, iou_pred = self.predict_masks(
             image_embeddings=image_embeddings,
             image_pe=image_pe,
@@ -384,7 +394,7 @@ class MaskDecoder3D(nn.Module):
         iou_pred = iou_pred[:, mask_slice]
 
         # Prepare output
-        return masks, iou_pred
+        return masks, iou_pred, time.time()-t
 
     def predict_masks(
         self,
