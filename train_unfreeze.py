@@ -110,7 +110,7 @@ class BaseTrainer:
         self.losses = []
         self.dices = []
         self.best_dice = 0.0
-        self.best_model_state = None  # 用于保存最高Dice得分的模型状态
+        self.best_model_state = None  
         self.ious = []
         self.set_loss_fn()
         self.freeze_encoder_layers() 
@@ -118,17 +118,17 @@ class BaseTrainer:
         self.set_lr_scheduler()
         self.init_checkpoint(join(self.args.work_dir, self.args.task_name, 'sam_med3d_initial.pth')) # pth load
         self.norm_transform = tio.ZNormalization(masking_method=lambda x: x > 0)
-        self.current_unfreeze_layer = -1  # 从最后一层开始
-        self.unfreeze_step = 1  # 每次解冻的层数
-        self.patience = 3  # 没有改善时的等待epochs数
-        self.wait = 0  # 等待的epoch数
-        self.prev_val_loss = float('inf')  # 上一个验证损失
+        self.current_unfreeze_layer = -1  
+        self.unfreeze_step = 1  
+        self.patience = 3  
+        self.wait = 0  
+        self.prev_val_loss = float('inf')  
     
     def set_loss_fn(self):
         self.seg_loss = DiceCELoss(sigmoid=True, squared_pred=True, reduction='mean')
     
     def freeze_encoder_layers(self):
-        # 如果使用了DDP包装，则需要访问原始模型
+        
         if isinstance(self.model, torch.nn.parallel.DistributedDataParallel):
             encoder = self.model.module.image_encoder
         else:
@@ -138,29 +138,23 @@ class BaseTrainer:
             param.requires_grad = False
             
     def unfreeze_layers(self):
-        # 计算需要解冻的层的索引
         layers_to_unfreeze = max(len(self.model.image_encoder.blocks) + self.current_unfreeze_layer, 0)
-        
-        # 解冻指定的层
         for i, block in enumerate(self.model.image_encoder.blocks):
             if i >= layers_to_unfreeze:
                 for param in block.parameters():
                     param.requires_grad = True
         
-        self.current_unfreeze_layer -= self.unfreeze_step  # 更新当前解冻的层
+        self.current_unfreeze_layer -= self.unfreeze_step 
     
     def check_performance_and_unfreeze(self, val_loss):
-        # 检查是否有性能改善
         if val_loss < self.prev_val_loss:
-            self.wait = 0  # 重置等待时间
+            self.wait = 0  
             self.prev_val_loss = val_loss
         else:
             self.wait += 1
             if self.wait >= self.patience:
-                # 没有改善，解冻更多层
                 self.unfreeze_layers()
-                self.wait = 0  # 重置等待时间
-                # 更新优化器和学习率调度器
+                self.wait = 0  
                 self.set_optimizer()
                 self.set_lr_scheduler()
 
@@ -170,7 +164,6 @@ class BaseTrainer:
         else:
             model = self.model
 
-        # 获取所有需要梯度的参数
         params_to_optimize = [
             {"params": [p for p in model.image_encoder.parameters() if p.requires_grad], "lr": self.args.lr * 0.1},
             {"params": [p for p in model.prompt_encoder.parameters() if p.requires_grad], "lr": self.args.lr * 0.1},
@@ -178,9 +171,6 @@ class BaseTrainer:
         ]
 
         self.optimizer = torch.optim.AdamW(params_to_optimize, lr=self.args.lr, betas=(0.9, 0.999), weight_decay=self.args.weight_decay)
-
-        # 如果需要，这里还可以重新设置学习率调度器
-        #self.set_lr_scheduler()
         
     def set_lr_scheduler(self):
         if self.args.lr_scheduler == "multisteplr":
@@ -376,8 +366,6 @@ class BaseTrainer:
             else:
                 step_loss += cur_loss
                 
-
-            #梯度更新训练
             if not self.args.multi_gpu or (self.args.multi_gpu and self.args.rank == 0):
                 if step % self.args.accumulation_steps == 0 and step != 0:
                     print(f'Epoch: {epoch}, Step: {step}, Loss: {print_loss}, Dice: {print_dice}')

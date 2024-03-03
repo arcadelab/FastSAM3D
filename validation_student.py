@@ -2,8 +2,8 @@ import os
 join = os.path.join
 import numpy as np
 from glob import glob
-import torch
-from segment_anything.build_sam3D import sam_model_registry3D
+import torch 
+from segment_anything.build_sam3D import sam_model_registry3D   #
 from segment_anything.utils.transforms3D import ResizeLongestSide3D
 from segment_anything import sam_model_registry
 from tqdm import tqdm
@@ -20,25 +20,27 @@ import pickle
 from utils.click_method import get_next_click3D_torch_ritm, get_next_click3D_torch_2
 from utils.data_loader import Dataset_Union_ALL_Val
 import time
-from segment_anything.modeling.image_encoder3D import ImageEncoderViT3D
+from segment_anything.modeling.image_encoder3D_c import ImageEncoderViT3D  #
 from thop import profile
 from torchinfo import summary
-
+#from fvcore.nn import FlopCountAnalysis            
+#from ptflops import get_model_complexity_info
 from functools import partial
+import nibabel as nib
 
 parser = argparse.ArgumentParser()
-parser.add_argument('-tdp', '--test_data_path', type=str, default='./data/validation')
-parser.add_argument('-vp', '--vis_path', type=str, default='./visualization')
-parser.add_argument('-cp', '--checkpoint_path', type=str, default="./ckpt/sam_med3d_turbo.pth")
-parser.add_argument('-sn', '--save_name', type=str, default='./results/sam_med3d.py')
+parser.add_argument('-tdp', '--test_data_path', type=str, default='/content/drive/MyDrive/paper_visual_results/totalseg') #
+parser.add_argument('-vp', '--vis_path', type=str, default='/content/drive/MyDrive/paper_visual_results/totalseg0441')  #
+parser.add_argument('-cp', '--checkpoint_path', type=str, default="work_dir/finetune/sam_model_latest.pth")
+parser.add_argument('-sn', '--save_name', type=str, default='/content/drive/MyDrive/paper_visual_results/totalseg0041.py/') #
 
 parser.add_argument('--image_size', type=int, default=128)
 parser.add_argument('--crop_size', type=int, default=128)
 parser.add_argument('--device', type=str, default='cuda')
 parser.add_argument('-mt', '--model_type', type=str, default='vit_b_ori')
-parser.add_argument('-nc', '--num_clicks', type=int, default=5)
+parser.add_argument('-nc', '--num_clicks', type=int, default=10)
 parser.add_argument('-pm', '--point_method', type=str, default='default')
-parser.add_argument('-dt', '--data_type', type=str, default='Ts')
+parser.add_argument('-dt', '--data_type', type=str, default='Tr')
 
 parser.add_argument('--threshold', type=int, default=0)
 parser.add_argument('--dim', type=int, default=3)
@@ -63,6 +65,13 @@ click_methods = {
     'ritm': get_next_click3D_torch_ritm,
     'random': get_next_click3D_torch_2,
 }
+
+def save_preprocessed_image(image3D_tensor, img_name, save_directory):
+    os.makedirs(save_directory, exist_ok=True)
+    image3D_np = image3D_tensor.cpu().numpy().squeeze()
+    img_nifti = nib.Nifti1Image(image3D_np, affine=np.eye(4))
+    save_path = os.path.join(save_directory, img_name.replace('.nii.gz', '_preprocessed.nii.gz'))
+    nib.save(img_nifti, save_path)
 
 def compute_iou(pred_mask, gt_semantic_seg):
     in_mask = np.logical_and(gt_semantic_seg, pred_mask)
@@ -234,6 +243,7 @@ def finetune_model_predict2D(img3D, gt3D, sam_model_tune, target_size=256, click
 
 
 def finetune_model_predict3D(tiny_vit,img3D, gt3D, sam_model_tune, device='cuda', click_method='random', num_clicks=10, prev_masks=None):
+    
     torch.cuda.reset_max_memory_allocated(device)
     encoder_time = 0 #
     decoder_time = []
@@ -249,16 +259,19 @@ def finetune_model_predict3D(tiny_vit,img3D, gt3D, sam_model_tune, device='cuda'
     if prev_masks is None:
         prev_masks = torch.zeros_like(gt3D).to(device)
     low_res_masks = F.interpolate(prev_masks.float(), size=(args.crop_size//4,args.crop_size//4,args.crop_size//4))
-    start_time = time.time() 
-    
+
+    FLOPS = np.zeros(num_clicks)
+
+
     with torch.no_grad():
-        image_embedding,times = tiny_vit(img3D.to(device)) # (1, 384, 16, 16, 16)
-        image_embedding = image_embedding[-1]
-    print(times)
-    FLOPS += profile(sam_model_tune.image_encoder,(img3D.to(device),))[0] # FLOPs for image encoder part
-    end_time = time.time() 
-    encoder_time += (end_time - start_time) #
-    memory_before = torch.cuda.max_memory_allocated(device)  #
+        image_embedding,times = tiny_vit(img3D.to(device))
+    image_embedding = image_embedding[-1] # (1, 384, 16, 16, 16)
+    print(profile(tiny_vit,(img3D.to(device),))[0]) # FLOPs for image encoder part
+    input_size = (1,128,128,128)
+    encoder_time = times
+    print(times) #
+    memory_before = torch.cuda.max_memory_allocated(device)
+    print(memory_before) #
     torch.cuda.reset_max_memory_allocated(device)
     for num_click in range(num_clicks):
         #
@@ -283,6 +296,7 @@ def finetune_model_predict3D(tiny_vit,img3D, gt3D, sam_model_tune, device='cuda'
             )
             FLOPS[num_click] += profile(sam_model_tune.prompt_encoder,([points_input, labels_input],None,low_res_masks.to(device),))[0]
             start_time = time.time()
+            
             low_res_masks, _ = sam_model_tune.mask_decoder(
                 image_embeddings=image_embedding.to(device), # (B, 384, 64, 64, 64)
                 image_pe=sam_model_tune.prompt_encoder.get_dense_pe(), # (1, 384, 64, 64, 64)
@@ -291,6 +305,7 @@ def finetune_model_predict3D(tiny_vit,img3D, gt3D, sam_model_tune, device='cuda'
                 multimask_output=False,
                 )
             FLOPS[num_click] += profile(sam_model_tune.mask_decoder,(image_embedding,sam_model_tune.prompt_encoder.get_dense_pe(),sparse_embeddings,dense_embeddings,False,))[0]
+
             end_time = time.time()
             decoder_time.append(end_time - start_time)
             memory_decoder = torch.cuda.max_memory_allocated(device) #
@@ -308,8 +323,12 @@ def finetune_model_predict3D(tiny_vit,img3D, gt3D, sam_model_tune, device='cuda'
 
 if __name__ == "__main__":   
     st = time.time() 
+
     all_dataset_paths = glob(join(args.test_data_path))
+    
+    print(args.test_data_path)
     all_dataset_paths = list(filter(os.path.isdir, all_dataset_paths))
+    
     print("get", len(all_dataset_paths), "datasets")
     
 
@@ -351,21 +370,22 @@ if __name__ == "__main__":
     elif(args.dim==2):
         args.sam_checkpoint = args.checkpoint_path
         sam_model_tune = sam_model_registry[args.model_type](args).to(device)
-
-    tiny_vit_checkpoint_path = 'ckpt/image_encoder_light_12_layer_8_head.pth'
-    tiny_vit =  ImageEncoderViT3D(
-            depth=12,
+    #change checkpoint here
+    tiny_vit_checkpoint_path = './ckpt/6layer6head2skip_logits.pth'  
+    tiny_vit =  ImageEncoderViT3D(                                    
+            depth=6,
             embed_dim=768,
             img_size=128,
             mlp_ratio=4,
             norm_layer=partial(torch.nn.LayerNorm, eps=1e-6),
-            num_heads=8,
+            num_heads=6,
             patch_size=16,
             qkv_bias=True,
             use_rel_pos=True,
             global_attn_indexes=[2,5,8,11],
             window_size=0,
             out_chans=384,
+            skip_layer = 2,
         )
     
     
@@ -390,16 +410,23 @@ if __name__ == "__main__":
     FLOPSS = []
     for batch_data in tqdm(test_dataloader):
         image3D, gt3D, img_name = batch_data
+
+        print(gt3D.shape)
+
+
         sz = image3D.size()
         if(sz[2]<args.crop_size or sz[3]<args.crop_size or sz[4]<args.crop_size):
             print("[ERROR] wrong size", sz, "for", img_name)
         modality = os.path.basename(os.path.dirname(os.path.dirname(os.path.dirname(img_name[0]))))
         dataset = os.path.basename(os.path.dirname(os.path.dirname(img_name[0])))
         vis_root = os.path.join(os.path.dirname(__file__), args.vis_path, modality, dataset)
+        gt_save_directory = os.path.join(vis_root, "gt_masks")
+        os.makedirs(gt_save_directory, exist_ok=True)
+        
         click_suffix = f"_pred{args.num_clicks - 1}.nii.gz"
         pred_path = os.path.join(vis_root, os.path.basename(img_name[0]).replace(".nii.gz", click_suffix))
 
-        if(os.path.exists(pred_path)):
+        if(1==0):
             iou_list, dice_list = [], []
             for iter in range(args.num_clicks):
                 curr_pred_path = os.path.join(vis_root, os.path.basename(img_name[0]).replace(".nii.gz", f"_pred{iter}.nii.gz"))
@@ -447,7 +474,7 @@ if __name__ == "__main__":
 
     print('Mean IoU : ', sum(all_iou_list)/len(all_iou_list))
     print('Mean Dice: ', sum(all_dice_list)/len(all_dice_list))
-
+    print(sum(encoder_times)/len(encoder_times))
     final_dice_dict = OrderedDict()
     for k, v in out_dice_all.items():
         organ = k.split('/')[-4]
@@ -475,7 +502,13 @@ if __name__ == "__main__":
         f.writelines('average decode')
         for j in average_decoder_times:
             f.writelines(f'\'{str(j)},\n')
-        f.writelines('average_decoder_times')
+        f.writelines('flops')
+        for j in FLOPS:
+            f.writelines(f'\'{str(j)},\n')
+        for j in memory_befores:
+            f.writelines(f'\'{str(j)},\n')
+        for j in memory_decoders:
+            f.writelines(f'\'{str(j)},\n')
         f.writelines('}')
     with open(args.save_name.replace('.py', '.json'), 'w') as f:
         json.dump(final_dice_dict, f, indent=4)

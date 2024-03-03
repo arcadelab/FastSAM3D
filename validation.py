@@ -5,7 +5,7 @@ from glob import glob
 import torch
 from segment_anything.build_sam3D import sam_model_registry3D
 from segment_anything.utils.transforms3D import ResizeLongestSide3D
-from segment_anything import sam_model_registry
+from originalsam.segment_anything.build_sam import sam_model_registry
 from tqdm import tqdm
 import argparse
 import SimpleITK as sitk
@@ -25,21 +25,21 @@ from torchinfo import summary
 from monai.losses import DiceCELoss
 
 parser = argparse.ArgumentParser()
-parser.add_argument('-tdp', '--test_data_path', type=str, default='data/initial_test_dataset/total_segment')
-parser.add_argument('-vp', '--vis_path', type=str, default='./visualization')
-parser.add_argument('-cp', '--checkpoint_path', type=str, default='work_dir/union_train/sam_model_latest.pth')
-parser.add_argument('-sn', '--save_name', type=str, default='./results/sam_med3d.py')
+parser.add_argument('-tdp', '--test_data_path', type=str, default='/content/drive/MyDrive/lighting_sam_3d/data/process_train_data/brats2')
+parser.add_argument('-vp', '--vis_path', type=str, default='/content/drive/MyDrive/paper_visual_results/totalseg0441/sammed_new')
+parser.add_argument('-cp', '--checkpoint_path', type=str, default='/content/drive/MyDrive/lighting_sam_3d/ckpt/sam_vit_b_01ec64.pth')
+parser.add_argument('-sn', '--save_name', type=str, default='/content/drive/MyDrive/lighting_sam_3d/reb/originalsam_bratsnew.py')
 
-parser.add_argument('--image_size', type=int, default=128)  #
+parser.add_argument('--image_size', type=int, default=1024)  #
 parser.add_argument('--crop_size', type=int, default=128)
 parser.add_argument('--device', type=str, default='cuda')
-parser.add_argument('-mt', '--model_type', type=str, default='vit_b_ori')
-parser.add_argument('-nc', '--num_clicks', type=int, default=5)
+parser.add_argument('-mt', '--model_type', type=str, default='vit_b')
+parser.add_argument('-nc', '--num_clicks', type=int, default=10)
 parser.add_argument('-pm', '--point_method', type=str, default='default')
-parser.add_argument('-dt', '--data_type', type=str, default='Ts')
-
+parser.add_argument('-dt', '--data_type', type=str, default='Tr')
+parser.add_argument("--encoder_adapter", type=bool, default=False, help="use adapter")
 parser.add_argument('--threshold', type=int, default=0)
-parser.add_argument('--dim', type=int, default=3)
+parser.add_argument('--dim', type=int, default=2)
 parser.add_argument('--split_idx', type=int, default=0)
 parser.add_argument('--split_num', type=int, default=1)
 parser.add_argument('--ft2d', action='store_true', default=False)
@@ -96,8 +96,6 @@ def get_points(click_type, prev_masks, gt3D, click_points, click_labels, device)
 
     points_multi = torch.cat(click_points, dim=1).to(device)
     labels_multi = torch.cat(click_labels, dim=1).to(device)
-
-    # 这里假设 multi_click 是一个布尔值
     
     points_input = points_multi
     labels_input = labels_multi
@@ -159,21 +157,23 @@ def postprocess_masks(low_res_masks, image_size, original_size):
     return masks, pad
 
 def sam_decoder_inference(target_size, points_coords, points_labels, model, image_embeddings, mask_inputs=None, multimask = False):
+    
     with torch.no_grad():
-        sparse_embeddings, dense_embeddings = model.prompt_encoder(
+        sparse_embeddings, dense_embeddings= model.prompt_encoder(
             points=(points_coords.to(model.device), points_labels.to(model.device)),
             boxes=None,
             masks=mask_inputs,
         )
-
-        low_res_masks, iou_predictions = model.mask_decoder(
+        torch.cuda.reset_max_memory_allocated(model.device)
+        low_res_masks, iou_predictions, t = model.mask_decoder(
             image_embeddings = image_embeddings,
             image_pe = model.prompt_encoder.get_dense_pe(),
             sparse_prompt_embeddings=sparse_embeddings,
             dense_prompt_embeddings=dense_embeddings,
-            multimask_output=multimask,
+            multimask_output = multimask,
         )
-    
+        memory = torch.cuda.max_memory_allocated(model.device)
+
     if multimask:
         max_values, max_indexs = torch.max(iou_predictions, dim=1)
         max_values = max_values.unsqueeze(1)
@@ -183,8 +183,28 @@ def sam_decoder_inference(target_size, points_coords, points_labels, model, imag
             low_res.append(low_res_masks[i:i+1, idx])
         low_res_masks = torch.stack(low_res, 0)
     masks = F.interpolate(low_res_masks, (target_size, target_size), mode="bilinear", align_corners=False,)
-    return masks, low_res_masks, iou_predictions
-
+    return masks, low_res_masks, iou_predictions,t,sparse_embeddings,dense_embeddings
+def sam_decoder_inference_n(target_size, points_coords, points_labels, model, image_embeddings, sparse_embeddings, dense_embeddings, mask_inputs=None, multimask = False):
+    with torch.no_grad():
+        torch.cuda.reset_max_memory_allocated(model.device)
+        low_res_masks, iou_predictions, t = model.mask_decoder(
+            image_embeddings = image_embeddings,
+            image_pe = model.prompt_encoder.get_dense_pe(),
+            sparse_prompt_embeddings=sparse_embeddings,
+            dense_prompt_embeddings=dense_embeddings,
+            multimask_output = multimask,
+        )
+        memory = torch.cuda.max_memory_allocated(model.device)
+    if multimask:
+        max_values, max_indexs = torch.max(iou_predictions, dim=1)
+        max_values = max_values.unsqueeze(1)
+        iou_predictions = max_values
+        low_res = []
+        for i, idx in enumerate(max_indexs):
+            low_res.append(low_res_masks[i:i+1, idx])
+        low_res_masks = torch.stack(low_res, 0)
+    masks = F.interpolate(low_res_masks, (target_size, target_size), mode="bilinear", align_corners=False,)
+    return masks, low_res_masks, iou_predictions,t
 def repixel_value(arr, is_seg=False):
     if not is_seg:
         min_val = arr.min()
@@ -231,9 +251,10 @@ def finetune_model_predict2D(img3D, gt3D, sam_model_tune, target_size=256, click
     dice_list = []
 
     slice_mask_list = defaultdict(list)
-
+    k = 0
     img3D = torch.repeat_interleave(img3D, repeats=3, dim=1) # 1 channel -> 3 channel (align to RGB)
-    
+    sparse_embeddings = []
+    dense_embeddings = []
     click_points = []
     click_labels = []
     for slice_idx in tqdm(range(img3D.size(-1)), desc="transverse slices", leave=False):
@@ -252,13 +273,15 @@ def finetune_model_predict2D(img3D, gt3D, sam_model_tune, target_size=256, click
         img2D = (img2D - img2D.mean()) / img2D.std()
 
         with torch.no_grad():
-            image_embeddings = sam_model_tune.image_encoder(img2D.float())
-
+            image_embeddings,_ = sam_model_tune.image_encoder(img2D.float())
+      
         points_co, points_la = torch.zeros(1,0,2).to(device), torch.zeros(1,0).to(device)
         low_res_masks = None
         gt_semantic_seg = gt2D[0, 0].to(device)
         true_masks = (gt_semantic_seg > 0)
-        for iter in range(num_clicks):
+        if k == 0:
+          k = 1
+          for iter in range(num_clicks):
             if(low_res_masks==None):
                 pred_masks = torch.zeros_like(true_masks).to(device)
             else:
@@ -271,8 +294,33 @@ def finetune_model_predict2D(img3D, gt3D, sam_model_tune, target_size=256, click
             new_points_co, new_points_la = new_points_co[None].to(device), new_points_la[None].to(device)
             points_co = torch.cat([points_co, new_points_co],dim=1)
             points_la = torch.cat([points_la, new_points_la],dim=1)
-            prev_masks, low_res_masks, iou_predictions = sam_decoder_inference(
+            prev_masks, low_res_masks, iou_predictions,_,sparse,dense, = sam_decoder_inference(
                 target_size, points_co, points_la, sam_model_tune, image_embeddings, 
+                mask_inputs = low_res_masks, multimask = True)
+            sparse_embeddings.append(sparse)
+            dense_embeddings.append(dense)
+            click_points.append(new_points_co)
+            click_labels.append(new_points_la)
+    
+            
+            slice_mask, _ = postprocess_masks(low_res_masks, target_size, (gt3D.size(2), gt3D.size(3)))
+            slice_mask_list[iter].append(slice_mask[..., None]) # append (B, C, H, W, 1)
+        else:
+          for iter in range(num_clicks):
+            if(low_res_masks==None):
+                pred_masks = torch.zeros_like(true_masks).to(device)
+            else:
+                pred_masks = (prev_masks[0, 0] > 0.0).to(device) 
+            fn_masks = torch.logical_and(true_masks, torch.logical_not(pred_masks))
+            fp_masks = torch.logical_and(torch.logical_not(true_masks), pred_masks)
+            mask_to_sample = torch.logical_or(fn_masks, fp_masks)
+            new_points_co, _ = random_point_sampling(mask_to_sample.cpu(), get_point=1)
+            new_points_la = torch.Tensor([1]).to(torch.int64) if(true_masks[new_points_co[0,1].int(), new_points_co[0,0].int()]) else torch.Tensor([0]).to(torch.int64)
+            new_points_co, new_points_la = new_points_co[None].to(device), new_points_la[None].to(device)
+            points_co = torch.cat([points_co, new_points_co],dim=1)
+            points_la = torch.cat([points_la, new_points_la],dim=1)
+            prev_masks, low_res_masks, iou_predictions,_ = sam_decoder_inference_n(
+                target_size, points_co, points_la, sam_model_tune, image_embeddings,sparse_embeddings[iter],dense_embeddings[iter],
                 mask_inputs = low_res_masks, multimask = True)
             click_points.append(new_points_co)
             click_labels.append(new_points_la)
@@ -289,9 +337,7 @@ def finetune_model_predict2D(img3D, gt3D, sam_model_tune, target_size=256, click
         iou_list.append(round(compute_iou(medsam_seg, gt3D[0][0].detach().cpu().numpy()), 4))
         dice_list.append(round(compute_dice(gt3D[0][0].detach().cpu().numpy().astype(np.uint8), medsam_seg), 4))
 
-    return pred_list, click_points, click_labels, iou_list, dice_list
-
-
+    return pred_list, click_points, click_labels, iou_list, dice_list,0,0
 def finetune_model_predict3D(img3D, gt3D, sam_model_tune, device='cuda', click_method='random', num_clicks=10, prev_masks=None):
     torch.cuda.reset_max_memory_allocated(device)
     encoder_time = 0 #
@@ -300,22 +346,20 @@ def finetune_model_predict3D(img3D, gt3D, sam_model_tune, device='cuda', click_m
     img3D = img3D.unsqueeze(dim=1)
     click_points = []
     click_labels = []
+    FLOPS = np.zeros(num_clicks)
 
     pred_list = []
     iou_list = []
     dice_list = []
-    FLOPS = np.zeros(num_clicks)
     if prev_masks is None:
         prev_masks = torch.zeros_like(gt3D).to(device)
     low_res_masks = F.interpolate(prev_masks.float(), size=(args.crop_size//4,args.crop_size//4,args.crop_size//4))
     start_time = time.time() 
     
     with torch.no_grad():
-        image_embedding = sam_model_tune.image_encoder(img3D.to(device))[-1] # (1, 384, 16, 16, 16)
-    FLOPS += profile(sam_model_tune.image_encoder,(img3D.to(device),))[0] # FLOPs for image encoder part
-    end_time = time.time() 
-    encoder_time += (end_time - start_time) #
-    memory_before = torch.cuda.max_memory_allocated(device)  #
+        image_embedding,times = sam_model_tune.image_encoder(img3D.to(device)) # (1, 384, 16, 16, 16)
+    image_embedding = image_embedding[-1]
+    memory_before = torch.cuda.max_memory_allocated(device) 
     torch.cuda.reset_max_memory_allocated(device)
     for num_click in range(num_clicks):
         #
@@ -340,17 +384,19 @@ def finetune_model_predict3D(img3D, gt3D, sam_model_tune, device='cuda', click_m
             )
             FLOPS[num_click] += profile(sam_model_tune.prompt_encoder,([points_input, labels_input],None,low_res_masks.to(device),))[0]
             start_time = time.time()
+            torch.cuda.reset_max_memory_allocated(device)
             low_res_masks, _ = sam_model_tune.mask_decoder(
                 image_embeddings=image_embedding.to(device), # (B, 384, 64, 64, 64)
                 image_pe=sam_model_tune.prompt_encoder.get_dense_pe(), # (1, 384, 64, 64, 64)
                 sparse_prompt_embeddings=sparse_embeddings, # (B, 2, 384)
                 dense_prompt_embeddings=dense_embeddings, # (B, 384, 64, 64, 64)
+      
                 multimask_output=False,
                 )
             FLOPS[num_click] += profile(sam_model_tune.mask_decoder,(image_embedding,sam_model_tune.prompt_encoder.get_dense_pe(),sparse_embeddings,dense_embeddings,False,))[0]
-            end_time = time.time()
-            decoder_time.append(end_time - start_time)
+            print('flops' + str(profile(sam_model_tune.mask_decoder,(image_embedding,sam_model_tune.prompt_encoder.get_dense_pe(),sparse_embeddings,dense_embeddings,False,))[0]))
             memory_decoder = torch.cuda.max_memory_allocated(device) #
+            print('memorydecoder' + str(memory_decoder))
             prev_masks = F.interpolate(low_res_masks, size=gt3D.shape[-3:], mode='trilinear', align_corners=False)
 
             medsam_seg_prob = torch.sigmoid(prev_masks)  # (B, 1, 64, 64, 64)
@@ -361,13 +407,13 @@ def finetune_model_predict3D(img3D, gt3D, sam_model_tune, device='cuda', click_m
 
             iou_list.append(round(compute_iou(medsam_seg, gt3D[0][0].detach().cpu().numpy()), 4))
             dice_list.append(round(compute_dice(gt3D[0][0].detach().cpu().numpy().astype(np.uint8), medsam_seg), 4))
+    # print(np.average(FLOPS))
     return pred_list, click_points, click_labels, iou_list, dice_list,encoder_time,decoder_time,memory_before, memory_decoder, FLOPS
 
 if __name__ == "__main__":   
     st = time.time() 
     all_dataset_paths = glob(join(args.test_data_path))
     all_dataset_paths = list(filter(os.path.isdir, all_dataset_paths))
-    
     print("get", len(all_dataset_paths), "datasets")
     
 
@@ -408,7 +454,7 @@ if __name__ == "__main__":
             sam_model_tune.load_state_dict(state_dict)
     elif(args.dim==2):
         args.sam_checkpoint = args.checkpoint_path
-        sam_model_tune = sam_model_registry[args.model_type](args).to(device)
+        sam_model_tune = sam_model_registry[args.model_type](args.checkpoint_path).to(device)
 
 
     sam_trans = ResizeLongestSide3D(sam_model_tune.image_encoder.img_size)
@@ -446,18 +492,10 @@ if __name__ == "__main__":
             sam_model.load_state_dict(state_dict)
             image_embedding = sam_model.image_encoder(image3D)
             start_time = time.time()
-
-            # 执行 interaction 方法
-            # 调用 interaction 函数时，不需要传递 click_type, seg_loss, img_size, 和 device
-            #prev_masks, loss = interaction(sam_model, image_embedding, gt3D, num_clicks=10)
-
-
-
-            # 结束时间测量
             end_time = time.time()
             elapsed_time = end_time - start_time
             print(f"self.interaction excution time:{elapsed_time} seconds")
-            if(os.path.exists(pred_path)):
+            if(1 == 0):
                 iou_list, dice_list = [], []
                 for iter in range(args.num_clicks):
                     curr_pred_path = os.path.join(vis_root, os.path.basename(img_name[0]).replace(".nii.gz", f"_pred{iter}.nii.gz"))
@@ -467,12 +505,12 @@ if __name__ == "__main__":
             else:
                 norm_transform = tio.ZNormalization(masking_method=lambda x: x > 0)
                 if(args.dim==3):
-                    seg_mask_list, points, labels, iou_list, dice_list,encoder_time,decoder_time,memory_before, memory_decoder, FLOPS = finetune_model_predict3D(
+                    seg_mask_list, points, labels, iou_list, dice_list,t,decoder_time,memory_before, memory_decoder, FLOPS = finetune_model_predict3D(
                         image3D, gt3D, sam_model_tune, device=device, 
                         click_method=args.point_method, num_clicks=args.num_clicks, 
                         prev_masks=None)
                 elif(args.dim==2):
-                    seg_mask_list, points, labels, iou_list, dice_list = finetune_model_predict2D(
+                    seg_mask_list, points, labels, iou_list, dice_list,t,decoder_time,= finetune_model_predict2D(
                         image3D, gt3D, sam_model_tune, device=device, target_size=args.image_size,
                         click_method=args.point_method, num_clicks=args.num_clicks, 
                         prev_masks=None)
@@ -486,23 +524,17 @@ if __name__ == "__main__":
                 for idx, pred3D in enumerate(seg_mask_list):
                     out = sitk.GetImageFromArray(pred3D)
                     sitk.WriteImage(out, os.path.join(vis_root, os.path.basename(img_name[0]).replace(".nii.gz", f"_pred{idx}.nii.gz")))
-
             per_iou = max(iou_list)
             all_iou_list.append(per_iou)
             all_dice_list.append(max(dice_list))
             print(dice_list)
             out_dice[img_name] = max(dice_list)
             cur_dice_dict = OrderedDict()
-            encoder_times.append(encoder_time)
-            average_decoder_times.append(np.average(decoder_time))
-            FLOPSS.append(FLOPS)
+            encoder_times.append(t)
             decoder_times.append(decoder_time)
-            memory_befores.append(memory_before)
-            memory_decoders.append(memory_decoder)
             for i, dice in enumerate(dice_list):
                 cur_dice_dict[f'{i}'] = dice
             out_dice_all[img_name[0]] = cur_dice_dict
-            w.append(sum(decoder_time) + encoder_time)
     print('Mean IoU : ', sum(all_iou_list)/len(all_iou_list))
     print('Mean Dice: ', sum(all_dice_list)/len(all_dice_list))
 
@@ -523,21 +555,11 @@ if __name__ == "__main__":
         f.writelines('dice_Ts = {')
         for k, v in out_dice.items():
             f.writelines(f'\'{str(k[0])}\': {v},\n')
-        f.writelines('encoder_time')
-        for i in encoder_times:
-            f.writelines(f'\'{str(i)},\n')
-        f.writelines('decode')
-        for j in decoder_times:
-            for b in j:
-                f.writelines(f'\'{str(b)},\n')
-        f.writelines('average decode')
-        for j in average_decoder_times:
-            f.writelines(f'\'{str(j)},\n')
-        f.writelines('whole_time')
-        f.writelines(f'\'{str(np.sum(w[1]))},\n')
     with open(args.save_name.replace('.py', '.json'), 'w') as f:
         json.dump(final_dice_dict, f, indent=4)
 
+    print(np.mean(encoder_times))
+    print(np.mean(decoder_times))
     print("Done")
     eo=time.time()-st
     print(eo)

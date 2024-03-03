@@ -288,22 +288,9 @@ class BaseTrainer:
                 for i in range(len(label)):
                     label[i] = label[i].to(device)
 
-                # Debug: Print input data stats
-                #print(f"Preprocessed input Max: {image3D.max()}")
-                #print(f"Preprocessed input Min: {image3D.min()}")
-                #print(f"Preprocessed input Mean: {image3D.mean()}")
-
                 with amp.autocast():
                     output = self.model(image3D)
                     loss = self.seg_loss(output[self.curlayer], label[self.curlayer])
-                    #log_probs = F.log_softmax(output[self.curlayer], dim=1)
-                    #klloss = self.kl_loss(log_probs, label[self.curlayer])
-                    # Debug: Print output stats and current loss
-                    #print(f"Output Max: {output[self.curlayer].max()}")
-                    #print(f"Output Min: {output[self.curlayer].min()}")
-                    #print(f"Output Mean: {output[self.curlayer].mean()}")
-                    #print(f"kl Loss: {klloss.item()}")
-                    #print(f"Current Loss: {loss.item()}")
                 
                 epoch_loss += loss.item()
 
@@ -312,11 +299,6 @@ class BaseTrainer:
                 loss /= self.args.accumulation_steps
                 
                 self.scaler.scale(loss).backward()
-
-                # Debug: Check gradients
-                #for name, param in sam_model.named_parameters():
-                    #if param.grad is not None:
-                        #print(f"Gradient of {name}, Max: {param.grad.data.max()}, Min: {param.grad.data.min()}")
 
             if step % self.args.accumulation_steps == 0 and step != 0:
                 self.scaler.step(self.optimizer)
@@ -340,7 +322,6 @@ class BaseTrainer:
                                 describe=f'{epoch}_step_dice:{print_loss}_best'
                             )
         epoch_loss /= step
-        #print_weight_stats(self.model, epoch)
         return epoch_loss
     
     def plot_result(self, plot_data, description, save_name):
@@ -399,7 +380,6 @@ class BaseTrainer:
                 
                 # save train dice best checkpoint
                 self.plot_result(self.losses, 'Dice + Cross Entropy Loss', 'Loss')
-                # self.plot_result(self.dices, 'Dice', 'Dice')
         logger.info('=====================================================================')
         logger.info(f'Best loss: {self.best_loss}')
         logger.info(f'Total loss: {self.losses}')

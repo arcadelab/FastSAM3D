@@ -22,9 +22,6 @@ parser.add_argument('--device', type=str, default='cuda', help='Device to run th
 args = parser.parse_args()
 
 def save_model_weights(model, save_path):
-    """
-    保存模型权重信息到指定路径。
-    """
     if not os.path.exists(os.path.dirname(save_path)):
         os.makedirs(os.path.dirname(save_path))
     torch.save(model.state_dict(), save_path)
