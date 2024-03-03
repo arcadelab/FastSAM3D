@@ -1,5 +1,19 @@
 img_datas = [
-'data/initial_train_dataset/total_segment'
+'data/process_train_data/amos/arota/amos',
+'data/process_train_data/amos/bladder/amos',
+'data/process_train_data/amos/duodenum/amos',
+'data/process_train_data/amos/esophagus/amos',
+'data/process_train_data/amos/gall_bladder/amos',
+'data/process_train_data/amos/left_adrenal_gland/amos',
+'data/process_train_data/amos/left_kidney/amos',
+'data/process_train_data/amos/liver/amos',
+'data/process_train_data/amos/pancreas/amos',
+'data/process_train_data/amos/postcava/amos',
+'data/process_train_data/amos/prostate/amos',
+'data/process_train_data/amos/right_adrenal_gland/amos',
+'data/process_train_data/amos/right_kidney/amos',
+'data/process_train_data/amos/spleen/amos',
+'data/process_train_data/amos/stomach/amos',
 ]
 
 all_datasets = [

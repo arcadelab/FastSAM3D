@@ -26,10 +26,10 @@ class Dataset_Union_ALL(Dataset):
         self.pcc = pcc
     
     def __len__(self):
+        print(f"Dataset size: {len(self.label_paths)}")
         return len(self.label_paths)
 
     def __getitem__(self, index):
-
         sitk_image = sitk.ReadImage(self.image_paths[index])
         sitk_label = sitk.ReadImage(self.label_paths[index])
 
@@ -42,15 +42,26 @@ class Dataset_Union_ALL(Dataset):
             image = tio.ScalarImage.from_sitk(sitk_image),
             label = tio.LabelMap.from_sitk(sitk_label),
         )
-
-        if '/ct_' in self.image_paths[index]:
-            subject = tio.Clamp(-1000,1000)(subject)
-
+        image_shape = subject.image.data.shape
+        print("Image shape:", image_shape)
+        # if '/ct_' in self.image_paths[index]:
+        # subject = tio.Clamp(-1000,1000)(subject)
         if self.transform:
             try:
                 subject = self.transform(subject)
             except:
                 print(self.image_paths[index])
+        
+              
+        # save_dir = "/content/drive/MyDrive/paper_visual_results/brats00412"  # 指定保存目录
+        # os.makedirs(save_dir, exist_ok=True)  # 确保目录存在
+
+        # # 转换PyTorch张量为NumPy数组，并保存图像
+        # image_np = subject.image.data.squeeze().numpy().astype(np.float32)  # 假设图像是单通道的
+        # image_sitk = sitk.GetImageFromArray(image_np)
+        # image_filename = os.path.basename(self.image_paths[index]).replace('.nii.gz', '_processed.nii.gz')
+        # image_filepath = os.path.join(save_dir, image_filename)
+        # sitk.WriteImage(image_sitk, image_filepath)
 
         if(self.pcc):
             print("using pcc setting")
@@ -70,25 +81,26 @@ class Dataset_Union_ALL(Dataset):
 
         if subject.label.data.sum() <= self.threshold:
             return self.__getitem__(np.random.randint(self.__len__()))
-        
         if self.mode == "train" and self.data_type == 'Tr':
             return subject.image.data.clone().detach(), subject.label.data.clone().detach()
         else:
             return subject.image.data.clone().detach(), subject.label.data.clone().detach(), self.image_paths[index]   
  
     def _set_file_paths(self, paths):
+        print(f"Given paths: {paths}")
         self.image_paths = []
         self.label_paths = []
 
         # if ${path}/labelsTr exists, search all .nii.gz
         for path in paths:
-            d = os.path.join(path, f'labels{self.data_type}')
+            d = os.path.join(path, f'images{self.data_type}')
             if os.path.exists(d):
                 for name in os.listdir(d):
                     base = os.path.basename(name).split('.nii.gz')[0]
                     label_path = os.path.join(path, f'labels{self.data_type}', f'{base}.nii.gz')
-                    self.image_paths.append(label_path.replace('labels', 'images'))
+                    self.image_paths.append(os.path.join(path, f'images{self.data_type}', f'{base}.nii.gz'))
                     self.label_paths.append(label_path)
+                    print(f"Found {len(self.image_paths)} image(s) and {len(self.label_paths)} label(s)") 
 
 class Dataset_Union_ALL_Val(Dataset_Union_ALL):
     def _set_file_paths(self, paths):
@@ -98,12 +110,15 @@ class Dataset_Union_ALL_Val(Dataset_Union_ALL):
         # if ${path}/labelsTr exists, search all .nii.gz
         for path in paths:
             for dt in ["Tr", "Val", "Ts"]:
-                d = os.path.join(path, f'labels{dt}')
+                d = os.path.join(path, f'images{dt}')
+                # print(path)
+                # print(d)
                 if os.path.exists(d):
                     for name in os.listdir(d):
+                        
                         base = os.path.basename(name).split('.nii.gz')[0]
                         label_path = os.path.join(path, f'labels{dt}', f'{base}.nii.gz') 
-                        self.image_paths.append(label_path.replace('labels', 'images'))
+                        self.image_paths.append(os.path.join(path, f'images{dt}', f'{base}.nii.gz'))
                         self.label_paths.append(label_path)
         self.image_paths = self.image_paths[self.split_idx::self.split_num]
         self.label_paths = self.label_paths[self.split_idx::self.split_num]

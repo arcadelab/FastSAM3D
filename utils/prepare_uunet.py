@@ -54,49 +54,24 @@ def resample_nii(input_path: str, output_path: str, target_spacing: tuple = (1.5
     # Save the resampled image to the specified output path
     save_image.save(output_path)
 
-# train_images_path = 'data/initial_test_dataset/amos/imagesTr'
-# train_label_path = 'data/initial_test_dataset/amos/labelsTr'
-# target_train_images_path = 'data/prepross_test_dataset/amos/imagesTr'
-# target_train_label_path = 'data/prepross_test_dataset/amos/labelsTr'
-# idx = 0
-# for i in os.listdir(train_images_path):
-#     print(i)
-#     target_gt_path = target_train_label_path + '/' + i
-#     target_img_path = target_train_images_path + '/' + i
-#     path_images = train_images_path + '/' + i
-#     path_labels = train_label_path + '/' + i
-#     img = path_images
-#     gt_img = nib.load(path_labels)    
-#     spacing = tuple(gt_img.header['pixdim'][1:4])
-#     # Calculate the product of the spacing values
-#     spacing_voxel = spacing[0] * spacing[1] * spacing[2]
-#     gt_arr = gt_img.get_fdata()
-#     gt_arr[gt_arr != idx] = 0
-#     gt_arr[gt_arr != 0] = 1
-#     volume = gt_arr.sum()*spacing_voxel
-#     # print("volume:", volume)
-#     if(volume<10): 
-#         continue
-#     # if(not osp.exists(target_gt_path)):
-#     reference_image = tio.ScalarImage(img)
-#     resample_nii(path_labels, target_gt_path, n=idx, reference_image=reference_image)
-#     shutil.copy(img, target_img_path)
-#     new_gt_img = nib.Nifti1Image(gt_arr, gt_img.affine, gt_img.header)
-#     new_gt_img.to_filename(target_gt_path)
-#     idx += 1
-dataset_list = ['amos']
-dataset_root = 'data/initial_test_dataset'
-target_dir = ''
+dataset_root = "data/initial_train_dataset"
+dataset_list = [
+    'brats'
+]
+
+target_dir = "/content/drive/MyDrive/lighting_sam_3d/data/process_train_data/brats"
+
+
 for dataset in dataset_list:
     dataset_dir = osp.join(dataset_root, dataset)
     meta_info = json.load(open(osp.join(dataset_dir, "dataset.json")))
-
-    #print(meta_info['name'], meta_info['modality'])
+    print(meta_info.keys())
+    print(meta_info['name'], meta_info['modality'])
     num_classes = len(meta_info["labels"])-1
-    #print("num_classes:", num_classes, meta_info["labels"])
-    resample_dir = osp.join(dataset_dir, "imagesTr_1.5") 
+    print("num_classes:", num_classes, meta_info["labels"])
+    resample_dir = osp.join(dataset_dir, "imagesTr") 
     os.makedirs(resample_dir, exist_ok=True)
-    print(len(meta_info["training"]), "is found")
+    # print(len(meta_info["training"]), "is found")
     for idx, cls_name in meta_info["labels"].items():
         cls_name = cls_name.replace(" ", "_")
         idx = int(idx)
@@ -108,7 +83,7 @@ for dataset in dataset_list:
         os.makedirs(target_gt_dir, exist_ok=True)
         for item in tqdm(meta_info["training"], desc=f"{dataset_name}-{cls_name}"):
             img, gt = item["image"], item["label"]
-            img = osp.join(dataset_dir, img.replace(".nii.gz", "_0000.nii.gz"))
+            img = osp.join(dataset_dir, img)
             gt = osp.join(dataset_dir, gt)
             resample_img = osp.join(resample_dir, osp.basename(img))
             if(not osp.exists(resample_img)):
@@ -120,7 +95,7 @@ for dataset in dataset_list:
             target_gt_path = osp.join(target_gt_dir, osp.basename(gt).replace("_0000.nii.gz", ".nii.gz"))
             # print(f"{gt}->{target_gt_path}")
 
-            gt_img = nib.load(gt)    
+            gt_img = nib.load(gt)       
             spacing = tuple(gt_img.header['pixdim'][1:4])
             # Calculate the product of the spacing values
             spacing_voxel = spacing[0] * spacing[1] * spacing[2]
@@ -139,8 +114,5 @@ for dataset in dataset_list:
             else:
                 resample_nii(gt, target_gt_path, n=idx, reference_image=reference_image)
             shutil.copy(img, target_img_path)
-            new_gt_img = nib.Nifti1Image(gt_arr, gt_img.affine, gt_img.header)
-            new_gt_img.to_filename(target_gt_path)
-
-
-
+            # new_gt_img = nib.Nifti1Image(gt_arr, gt_img.affine, gt_img.header)
+            # new_gt_img.to_filename(target_gt_path)
