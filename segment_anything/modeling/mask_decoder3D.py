@@ -9,6 +9,7 @@ from torch import nn
 from torch.nn import functional as F
 
 from typing import List, Tuple, Type
+
 # from .transformer import TwoWayTransformer
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 # All rights reserved.
@@ -37,6 +38,8 @@ class MLPBlock3D(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.lin2(self.act(self.lin1(x)))
+
+
 # substitute oringinal twowaytransformer 2 this
 class TwoWayTransformer3D(nn.Module):
     def __init__(
@@ -223,7 +226,9 @@ class Attention(nn.Module):
         self.embedding_dim = embedding_dim
         self.internal_dim = embedding_dim // downsample_rate
         self.num_heads = num_heads
-        assert self.internal_dim % num_heads == 0, "num_heads must divide embedding_dim."
+        assert (
+            self.internal_dim % num_heads == 0
+        ), "num_heads must divide embedding_dim."
 
         self.q_proj = nn.Linear(embedding_dim, self.internal_dim)
         self.k_proj = nn.Linear(embedding_dim, self.internal_dim)
@@ -266,7 +271,6 @@ class Attention(nn.Module):
         # print(out.shape)
 
         return out
-
 
 
 class LayerNorm3d(nn.Module):
@@ -315,11 +319,11 @@ class MaskDecoder3D(nn.Module):
         self.transformer_dim = transformer_dim
         # self.transformer = transformer
         self.transformer = TwoWayTransformer3D(
-                depth=2,
-                embedding_dim=self.transformer_dim,
-                mlp_dim=2048,
-                num_heads=8,
-            )
+            depth=2,
+            embedding_dim=self.transformer_dim,
+            mlp_dim=2048,
+            num_heads=8,
+        )
 
         self.num_multimask_outputs = num_multimask_outputs
 
@@ -328,10 +332,14 @@ class MaskDecoder3D(nn.Module):
         self.mask_tokens = nn.Embedding(self.num_mask_tokens, transformer_dim)
 
         self.output_upscaling = nn.Sequential(
-            nn.ConvTranspose3d(transformer_dim, transformer_dim // 4, kernel_size=2, stride=2),
+            nn.ConvTranspose3d(
+                transformer_dim, transformer_dim // 4, kernel_size=2, stride=2
+            ),
             LayerNorm3d(transformer_dim // 4),
             activation(),
-            nn.ConvTranspose3d(transformer_dim // 4, transformer_dim // 8, kernel_size=2, stride=2),
+            nn.ConvTranspose3d(
+                transformer_dim // 4, transformer_dim // 8, kernel_size=2, stride=2
+            ),
             activation(),
         )
         self.output_hypernetworks_mlps = nn.ModuleList(
@@ -395,8 +403,12 @@ class MaskDecoder3D(nn.Module):
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Predicts masks. See 'forward' for more details."""
         # Concatenate output tokens
-        output_tokens = torch.cat([self.iou_token.weight, self.mask_tokens.weight], dim=0)
-        output_tokens = output_tokens.unsqueeze(0).expand(sparse_prompt_embeddings.size(0), -1, -1)
+        output_tokens = torch.cat(
+            [self.iou_token.weight, self.mask_tokens.weight], dim=0
+        )
+        output_tokens = output_tokens.unsqueeze(0).expand(
+            sparse_prompt_embeddings.size(0), -1, -1
+        )
         tokens = torch.cat((output_tokens, sparse_prompt_embeddings), dim=1)
 
         # Expand per-image data in batch direction to be per-mask
@@ -422,10 +434,14 @@ class MaskDecoder3D(nn.Module):
         upscaled_embedding = self.output_upscaling(src)
         hyper_in_list: List[torch.Tensor] = []
         for i in range(self.num_mask_tokens):
-            hyper_in_list.append(self.output_hypernetworks_mlps[i](mask_tokens_out[:, i, :]))
+            hyper_in_list.append(
+                self.output_hypernetworks_mlps[i](mask_tokens_out[:, i, :])
+            )
         hyper_in = torch.stack(hyper_in_list, dim=1)
         b, c, x, y, z = upscaled_embedding.shape
-        masks = (hyper_in @ upscaled_embedding.view(b, c, x * y * z)).view(b, -1, x, y, z)
+        masks = (hyper_in @ upscaled_embedding.view(b, c, x * y * z)).view(
+            b, -1, x, y, z
+        )
 
         # Generate mask quality predictions
         iou_pred = self.iou_prediction_head(iou_token_out)
@@ -458,4 +474,3 @@ class MLP(nn.Module):
         if self.sigmoid_output:
             x = F.sigmoid(x)
         return x
-

@@ -9,7 +9,7 @@ module_name_list = [
 
 for module_idx, module_name in enumerate(module_name_list):
     try:
-        module = importlib.import_module("results."+module_name)
+        module = importlib.import_module("results." + module_name)
     except:
         raise ValueError("file not found", module_name)
     dice_Ts = module.dice_Ts
@@ -19,11 +19,9 @@ for module_idx, module_name in enumerate(module_name_list):
         # print(k)
         cls, dataset, data_type, case = k[-4], k[-3], k[-2], k[-1]
         # print(cls, dataset, data_type, case)
-        final_results[cls].append(v*100)
+        final_results[cls].append(v * 100)
     print(f"-----[{module_name}]-------")
     print("cls\t|  dice")
     for k, v in final_results.items():
-        print( k, "\t|", "{:.2f}%".format(float(np.mean(v))))
+        print(k, "\t|", "{:.2f}%".format(float(np.mean(v))))
     print("----------------------------")
-
-    
