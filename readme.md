@@ -190,13 +190,7 @@ Contributions are welcome! Here are several ways you can contribute:
 </details>
 
 <details closed>
-<summary>Contributor Graph</summary>
-<br>
-<p align="center">
-   <a href="https://github.com{/skill-diver/FastSAM3D-v1/}graphs/contributors">
-      <img src="https://contrib.rocks/image?repo=skill-diver/FastSAM3D-v1">
-   </a>
-</p>
+
 </details>
 
 ---
