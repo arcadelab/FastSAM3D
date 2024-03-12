@@ -13,6 +13,7 @@ from flash_attn import flash_attn_qkvpacked_func, flash_attn_func
 
 from torchsummary import summary
 
+
 class MLPBlock(nn.Module):
     def __init__(
         self,
@@ -27,7 +28,8 @@ class MLPBlock(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.lin2(self.act(self.lin1(x)))
-    
+
+
 class LayerNorm3d(nn.Module):
     def __init__(self, num_channels: int, eps: float = 1e-6) -> None:
         super().__init__()
@@ -63,8 +65,8 @@ class ImageEncoderViT3D(nn.Module):
         rel_pos_zero_init: bool = True,
         window_size: int = 0,
         global_attn_indexes: Tuple[int, ...] = (),
-        layeroutput = 2,
-        skip_layer = 2,
+        layeroutput=2,
+        skip_layer=2,
     ) -> None:
         """
         Args:
@@ -98,25 +100,37 @@ class ImageEncoderViT3D(nn.Module):
         if use_abs_pos:
             # Initialize absolute positional embedding with pretrain image size.
             self.pos_embed = nn.Parameter(
-                torch.zeros(1, img_size // patch_size, img_size // patch_size, img_size // patch_size, embed_dim)
+                torch.zeros(
+                    1,
+                    img_size // patch_size,
+                    img_size // patch_size,
+                    img_size // patch_size,
+                    embed_dim,
+                )
             )
 
         self.blocks = nn.ModuleList()
 
         for i in range(skip_layer):
-            self.blocks.append(Block3D_woatt(
-                dim=embed_dim,
-                num_heads=num_heads,
-                mlp_ratio=mlp_ratio,
-                qkv_bias=qkv_bias,
-                norm_layer=norm_layer,
-                act_layer=act_layer,
-                use_rel_pos=use_rel_pos,
-                rel_pos_zero_init=rel_pos_zero_init,
-                window_size=window_size if i not in global_attn_indexes else 0,
-                input_size=(img_size // patch_size, img_size // patch_size, img_size // patch_size),
-        ))
-        for i in range(depth-skip_layer):
+            self.blocks.append(
+                Block3D_woatt(
+                    dim=embed_dim,
+                    num_heads=num_heads,
+                    mlp_ratio=mlp_ratio,
+                    qkv_bias=qkv_bias,
+                    norm_layer=norm_layer,
+                    act_layer=act_layer,
+                    use_rel_pos=use_rel_pos,
+                    rel_pos_zero_init=rel_pos_zero_init,
+                    window_size=window_size if i not in global_attn_indexes else 0,
+                    input_size=(
+                        img_size // patch_size,
+                        img_size // patch_size,
+                        img_size // patch_size,
+                    ),
+                )
+            )
+        for i in range(depth - skip_layer):
             block = Block3D(
                 dim=embed_dim,
                 num_heads=num_heads,
@@ -127,7 +141,11 @@ class ImageEncoderViT3D(nn.Module):
                 use_rel_pos=use_rel_pos,
                 rel_pos_zero_init=rel_pos_zero_init,
                 window_size=window_size if i not in global_attn_indexes else 0,
-                input_size=(img_size // patch_size, img_size // patch_size, img_size // patch_size),
+                input_size=(
+                    img_size // patch_size,
+                    img_size // patch_size,
+                    img_size // patch_size,
+                ),
             )
             self.blocks.append(block)
 
@@ -172,7 +190,7 @@ class ImageEncoderViT3D(nn.Module):
         t = time.time()
         listx = []
         x = self.patch_embed(x)
-        
+
         # x = [1,16,16,16,768]
         # import pdb; pdb.set_trace()
         if self.pos_embed is not None:
@@ -180,13 +198,15 @@ class ImageEncoderViT3D(nn.Module):
         listx.append(x)
         i = 0
         for blk in self.blocks:
-          x = blk(x)
-            
+            x = blk(x)
+
         # x = [1,16,16,16,768]
         x = self.neck(x.permute(0, 4, 1, 2, 3))
         listx.append(x)
         # output_size = [1,256,16,16,16]
-        return listx,time.time()-t
+        return listx, time.time() - t
+
+
 class Block3D(nn.Module):
     """Transformer blocks with support of window attention and residual propagation blocks"""
 
@@ -226,11 +246,17 @@ class Block3D(nn.Module):
             qkv_bias=qkv_bias,
             use_rel_pos=use_rel_pos,
             rel_pos_zero_init=rel_pos_zero_init,
-            input_size=input_size if window_size == 0 else (window_size, window_size, window_size),
+            input_size=(
+                input_size
+                if window_size == 0
+                else (window_size, window_size, window_size)
+            ),
         )
 
         self.norm2 = norm_layer(dim)
-        self.mlp = MLPBlock(embedding_dim=dim, mlp_dim=int(dim * mlp_ratio), act=act_layer)
+        self.mlp = MLPBlock(
+            embedding_dim=dim, mlp_dim=int(dim * mlp_ratio), act=act_layer
+        )
 
         self.window_size = window_size
 
@@ -249,7 +275,7 @@ class Block3D(nn.Module):
 
         x = shortcut + x1
         x = self.norm2(x)
-        
+
         x = x + self.mlp(x)
 
         return x
@@ -298,16 +324,19 @@ class Block3D_woatt(nn.Module):
         # )
 
         self.norm2 = norm_layer(dim)
-        self.mlp = MLPBlock(embedding_dim=dim, mlp_dim=int(dim * mlp_ratio), act=act_layer)
+        self.mlp = MLPBlock(
+            embedding_dim=dim, mlp_dim=int(dim * mlp_ratio), act=act_layer
+        )
 
         self.window_size = window_size
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.norm2(x)
-        
+
         x = x + self.mlp(x)
 
         return x
+
 
 class Attention(nn.Module):
     """Multi-head Attention block with relative position embeddings."""
@@ -352,34 +381,37 @@ class Attention(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         B, D, H, W, _ = x.shape
         seqlen = D * H * W  # sequence_length
-        #x = x.half()
+        # x = x.half()
         # 通过 self.qkv 线性层变换
         qkv = self.qkv(x)
         print(qkv.shape)
         # 重塑 qkv 以拆分 Q, K, V 并将它们放置在不同的维度上
         # (B, seqlen, 3 * num_heads * head_dim)
         qkv = qkv.reshape(B, seqlen, 3, self.num_heads, -1)
-        
+
         # adjust qkv dimension to match flash_attn_qkvpacked_func
         # (batch_size, seqlen, 3, num_heads, head_dim)
         qkv = qkv.permute(0, 1, 2, 3, 4)
-       
-        #q, k, v = qkv.reshape(3, B * self.num_heads, D * H * W, -1).unbind(0)
+
+        # q, k, v = qkv.reshape(3, B * self.num_heads, D * H * W, -1).unbind(0)
         qkv = qkv.half()
         print(qkv.shape)
-        attn = flash_attn_qkvpacked_func(qkv, dropout_p=0.0, softmax_scale=None, causal=False)
+        attn = flash_attn_qkvpacked_func(
+            qkv, dropout_p=0.0, softmax_scale=None, causal=False
+        )
         attn = attn.float()
         # 重塑 attn_out 以匹配原输入的形状，准备投影层
         # attn_out with shape (B, D, H, W, num_heads * headdim)
         attn_out = attn.view(B, D, H, W, -1)
         # 投影层转换
-        #x = self.proj(attn_out)
-        x=attn_out
+        # x = self.proj(attn_out)
+        x = attn_out
         return x
 
 
-
-def window_partition3D(x: torch.Tensor, window_size: int) -> Tuple[torch.Tensor, Tuple[int, int, int]]:
+def window_partition3D(
+    x: torch.Tensor, window_size: int
+) -> Tuple[torch.Tensor, Tuple[int, int, int]]:
     """
     Partition into non-overlapping windows with padding if needed.
     Args:
@@ -395,18 +427,34 @@ def window_partition3D(x: torch.Tensor, window_size: int) -> Tuple[torch.Tensor,
     pad_d = (window_size - D % window_size) % window_size
     pad_h = (window_size - H % window_size) % window_size
     pad_w = (window_size - W % window_size) % window_size
-    
+
     if pad_h > 0 or pad_w > 0 or pad_d > 0:
         x = F.pad(x, (0, 0, 0, pad_w, 0, pad_h, 0, pad_d))
     Hp, Wp, Dp = H + pad_h, W + pad_w, D + pad_d
 
-    x = x.view(B, Dp // window_size, window_size, Hp // window_size, window_size, Wp // window_size, window_size, C)
-    windows = x.permute(0, 1, 3, 5, 2, 4, 6, 7).contiguous().view(-1, window_size, window_size, window_size, C)
+    x = x.view(
+        B,
+        Dp // window_size,
+        window_size,
+        Hp // window_size,
+        window_size,
+        Wp // window_size,
+        window_size,
+        C,
+    )
+    windows = (
+        x.permute(0, 1, 3, 5, 2, 4, 6, 7)
+        .contiguous()
+        .view(-1, window_size, window_size, window_size, C)
+    )
     return windows, (Dp, Hp, Wp)
 
 
 def window_unpartition3D(
-    windows: torch.Tensor, window_size: int, pad_dhw: Tuple[int, int, int], dhw: Tuple[int, int, int]
+    windows: torch.Tensor,
+    window_size: int,
+    pad_dhw: Tuple[int, int, int],
+    dhw: Tuple[int, int, int],
 ) -> torch.Tensor:
     """
     Window unpartition into original sequences and removing padding.
@@ -422,7 +470,16 @@ def window_unpartition3D(
     Dp, Hp, Wp = pad_dhw
     D, H, W = dhw
     B = windows.shape[0] // (Dp * Hp * Wp // window_size // window_size // window_size)
-    x = windows.view(B, Dp // window_size, Hp // window_size, Wp // window_size, window_size, window_size, window_size, -1)
+    x = windows.view(
+        B,
+        Dp // window_size,
+        Hp // window_size,
+        Wp // window_size,
+        window_size,
+        window_size,
+        window_size,
+        -1,
+    )
     x = x.permute(0, 1, 4, 2, 5, 3, 6, 7).contiguous().view(B, Hp, Wp, Dp, -1)
 
     if Hp > H or Wp > W or Dp > D:
@@ -492,18 +549,19 @@ def add_decomposed_rel_pos(
     Rd = get_rel_pos(q_d, k_d, rel_pos_d)
     Rh = get_rel_pos(q_h, k_h, rel_pos_h)
     Rw = get_rel_pos(q_w, k_w, rel_pos_w)
-    
+
     B, _, dim = q.shape
     r_q = q.reshape(B, q_d, q_h, q_w, dim)
 
     rel_d = torch.einsum("bdhwc,dkc->bdhwk", r_q, Rd)
     rel_h = torch.einsum("bdhwc,hkc->bdhwk", r_q, Rh)
     rel_w = torch.einsum("bdhwc,wkc->bdhwk", r_q, Rw)
-    
 
-    
     attn = (
-        attn.view(B, q_d, q_h, q_w, k_d, k_h, k_w) + rel_d[:, :, :, :, None, None] + rel_h[:, :, :, None, :, None] + rel_w[:, :, :,None,None, :]
+        attn.view(B, q_d, q_h, q_w, k_d, k_h, k_w)
+        + rel_d[:, :, :, :, None, None]
+        + rel_h[:, :, :, None, :, None]
+        + rel_w[:, :, :, None, None, :]
     ).view(B, q_d * q_h * q_w, k_d * k_h * k_w)
 
     return attn

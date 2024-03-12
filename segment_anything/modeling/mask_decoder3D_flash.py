@@ -9,6 +9,7 @@ from torch import nn
 from torch.nn import functional as F
 
 from typing import List, Tuple, Type
+
 # from .transformer import TwoWayTransformer
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 # All rights reserved.
@@ -22,6 +23,7 @@ from torch import Tensor, nn
 import math
 from typing import Tuple, Type
 from flash_attn import flash_attn_qkvpacked_func, flash_attn_func
+
 
 class MLPBlock3D(nn.Module):
     def __init__(
@@ -37,6 +39,8 @@ class MLPBlock3D(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.lin2(self.act(self.lin1(x)))
+
+
 # substitute oringinal twowaytransformer 2 this
 class TwoWayTransformer3D(nn.Module):
     def __init__(
@@ -205,9 +209,12 @@ class TwoWayAttentionBlock3D(nn.Module):
         keys = self.norm4(keys)
 
         return queries, keys
+
+
 # def apply_dilation(x, dilation_rate=4):
-      
+
 #     return x[:, ::dilation_rate, :]
+
 
 class Attention(nn.Module):
     """
@@ -225,7 +232,9 @@ class Attention(nn.Module):
         self.embedding_dim = embedding_dim
         self.internal_dim = embedding_dim // downsample_rate
         self.num_heads = num_heads
-        assert self.internal_dim % num_heads == 0, "num_heads must divide embedding_dim."
+        assert (
+            self.internal_dim % num_heads == 0
+        ), "num_heads must divide embedding_dim."
 
         self.q_proj = nn.Linear(embedding_dim, self.internal_dim)
         self.k_proj = nn.Linear(embedding_dim, self.internal_dim)
@@ -242,7 +251,6 @@ class Attention(nn.Module):
         x = x.transpose(1, 2)
         return x.reshape(b, n_tokens, n_heads * c_per_head)  # B x N_tokens x C
 
-
     def forward(self, q: Tensor, k: Tensor, v: Tensor) -> Tensor:
         batch_size, seq_len, _ = q.shape
         # q_dilated = apply_dilation(q, dilation_rate=4)
@@ -257,25 +265,26 @@ class Attention(nn.Module):
         q = self._separate_heads(q, self.num_heads)
         k = self._separate_heads(k, self.num_heads)
         v = self._separate_heads(v, self.num_heads)
-        q=q.permute(0, 2, 1, 3)
-        k=k.permute(0, 2, 1, 3)
-        v=v.permute(0, 2, 1, 3)
-        print("q shape",q.shape)
-        #B,head,seqlen,embdimm
-       
-        #q,k,v = q.reshape(batch_size, new_seq_length,self.heads, -1),k.reshape(batch_size, new_seq_length, self.heads, -1),v.reshape(batch_size, new_seq_length, self.heads, -1)
+        q = q.permute(0, 2, 1, 3)
+        k = k.permute(0, 2, 1, 3)
+        v = v.permute(0, 2, 1, 3)
+        print("q shape", q.shape)
+        # B,head,seqlen,embdimm
+
+        # q,k,v = q.reshape(batch_size, new_seq_length,self.heads, -1),k.reshape(batch_size, new_seq_length, self.heads, -1),v.reshape(batch_size, new_seq_length, self.heads, -1)
         q, k, v = q.half(), k.half(), v.half()
-        attn=flash_attn_func(q, k, v, dropout_p=0.0, softmax_scale=None, causal=False)
-        attn=attn.float()
-        print("attn shape",attn.shape)
-        print("v shape",v.shape)
-        attn_out = attn.transpose(2, 3).contiguous().view(batch_size, seq_len, -1)  # B, S, (N*H)
+        attn = flash_attn_func(q, k, v, dropout_p=0.0, softmax_scale=None, causal=False)
+        attn = attn.float()
+        print("attn shape", attn.shape)
+        print("v shape", v.shape)
+        attn_out = (
+            attn.transpose(2, 3).contiguous().view(batch_size, seq_len, -1)
+        )  # B, S, (N*H)
 
         # 如果需要，通过一个线性层调整维度
         # 假设self.out_proj是一个线性层，已经在__init__中以适当的输出维度初始化
         attn_out = self.out_proj(attn_out)  # B, S, embedding_dim
         return attn_out
-    
 
 
 class LayerNorm3d(nn.Module):
@@ -324,11 +333,11 @@ class MaskDecoder3D(nn.Module):
         self.transformer_dim = transformer_dim
         # self.transformer = transformer
         self.transformer = TwoWayTransformer3D(
-                depth=2,
-                embedding_dim=self.transformer_dim,
-                mlp_dim=2048,
-                num_heads=8,
-            )
+            depth=2,
+            embedding_dim=self.transformer_dim,
+            mlp_dim=2048,
+            num_heads=8,
+        )
 
         self.num_multimask_outputs = num_multimask_outputs
 
@@ -337,10 +346,14 @@ class MaskDecoder3D(nn.Module):
         self.mask_tokens = nn.Embedding(self.num_mask_tokens, transformer_dim)
 
         self.output_upscaling = nn.Sequential(
-            nn.ConvTranspose3d(transformer_dim, transformer_dim // 4, kernel_size=2, stride=2),
+            nn.ConvTranspose3d(
+                transformer_dim, transformer_dim // 4, kernel_size=2, stride=2
+            ),
             LayerNorm3d(transformer_dim // 4),
             activation(),
-            nn.ConvTranspose3d(transformer_dim // 4, transformer_dim // 8, kernel_size=2, stride=2),
+            nn.ConvTranspose3d(
+                transformer_dim // 4, transformer_dim // 8, kernel_size=2, stride=2
+            ),
             activation(),
         )
         self.output_hypernetworks_mlps = nn.ModuleList(
@@ -361,7 +374,7 @@ class MaskDecoder3D(nn.Module):
         sparse_prompt_embeddings: torch.Tensor,
         dense_prompt_embeddings: torch.Tensor,
         multimask_output: bool,
-    ) -> Tuple[torch.Tensor, torch.Tensor,float]:
+    ) -> Tuple[torch.Tensor, torch.Tensor, float]:
         """
         Predict masks given image and prompt embeddings.
 
@@ -377,7 +390,7 @@ class MaskDecoder3D(nn.Module):
           torch.Tensor: batched predicted masks
           torch.Tensor: batched predictions of mask quality
         """
-        t=time.time()
+        t = time.time()
         masks, iou_pred = self.predict_masks(
             image_embeddings=image_embeddings,
             image_pe=image_pe,
@@ -394,7 +407,7 @@ class MaskDecoder3D(nn.Module):
         iou_pred = iou_pred[:, mask_slice]
 
         # Prepare output
-        return masks, iou_pred, time.time()-t
+        return masks, iou_pred, time.time() - t
 
     def predict_masks(
         self,
@@ -405,8 +418,12 @@ class MaskDecoder3D(nn.Module):
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Predicts masks. See 'forward' for more details."""
         # Concatenate output tokens
-        output_tokens = torch.cat([self.iou_token.weight, self.mask_tokens.weight], dim=0)
-        output_tokens = output_tokens.unsqueeze(0).expand(sparse_prompt_embeddings.size(0), -1, -1)
+        output_tokens = torch.cat(
+            [self.iou_token.weight, self.mask_tokens.weight], dim=0
+        )
+        output_tokens = output_tokens.unsqueeze(0).expand(
+            sparse_prompt_embeddings.size(0), -1, -1
+        )
         tokens = torch.cat((output_tokens, sparse_prompt_embeddings), dim=1)
 
         # Expand per-image data in batch direction to be per-mask
@@ -432,10 +449,14 @@ class MaskDecoder3D(nn.Module):
         upscaled_embedding = self.output_upscaling(src)
         hyper_in_list: List[torch.Tensor] = []
         for i in range(self.num_mask_tokens):
-            hyper_in_list.append(self.output_hypernetworks_mlps[i](mask_tokens_out[:, i, :]))
+            hyper_in_list.append(
+                self.output_hypernetworks_mlps[i](mask_tokens_out[:, i, :])
+            )
         hyper_in = torch.stack(hyper_in_list, dim=1)
         b, c, x, y, z = upscaled_embedding.shape
-        masks = (hyper_in @ upscaled_embedding.view(b, c, x * y * z)).view(b, -1, x, y, z)
+        masks = (hyper_in @ upscaled_embedding.view(b, c, x * y * z)).view(
+            b, -1, x, y, z
+        )
 
         # Generate mask quality predictions
         iou_pred = self.iou_prediction_head(iou_token_out)
@@ -468,4 +489,3 @@ class MLP(nn.Module):
         if self.sigmoid_output:
             x = F.sigmoid(x)
         return x
-

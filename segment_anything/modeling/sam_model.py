@@ -40,14 +40,18 @@ class Sam(nn.Module):
         self.image_encoder = image_encoder
         self.prompt_encoder = prompt_encoder
         self.mask_decoder = mask_decoder
-        self.register_buffer("pixel_mean", torch.Tensor(pixel_mean).view(-1, 1, 1), False)
+        self.register_buffer(
+            "pixel_mean", torch.Tensor(pixel_mean).view(-1, 1, 1), False
+        )
         self.register_buffer("pixel_std", torch.Tensor(pixel_std).view(-1, 1, 1), False)
 
     @property
     def device(self) -> Any:
         return self.pixel_mean.device
 
-    def forward(self, batched_input: Dict[str, Any], multimask_output: bool) -> List[Dict[str, torch.Tensor]]:
+    def forward(
+        self, batched_input: Dict[str, Any], multimask_output: bool
+    ) -> List[Dict[str, torch.Tensor]]:
 
         input_images = batched_input.get("image")
         image_embeddings = self.image_encoder(input_images)
@@ -78,20 +82,30 @@ class Sam(nn.Module):
         )
 
         outputs = {
-                    "masks": masks,
-                    "iou_predictions": iou_predictions,
-                    "low_res_logits": low_res_masks,
-                }
+            "masks": masks,
+            "iou_predictions": iou_predictions,
+            "low_res_logits": low_res_masks,
+        }
 
         return outputs
 
-    def postprocess_masks(self,masks: torch.Tensor, input_size: Tuple[int, ...],original_size: Tuple[int, ...],) -> torch.Tensor:
+    def postprocess_masks(
+        self,
+        masks: torch.Tensor,
+        input_size: Tuple[int, ...],
+        original_size: Tuple[int, ...],
+    ) -> torch.Tensor:
         masks = F.interpolate(
             masks,
-            (self.image_encoder.img_size, self.image_encoder.img_size), mode="bilinear", align_corners=False,)  #[1,1024,1024]
+            (self.image_encoder.img_size, self.image_encoder.img_size),
+            mode="bilinear",
+            align_corners=False,
+        )  # [1,1024,1024]
 
         masks = masks[..., : input_size[0], : input_size[1]]
-        masks = F.interpolate(masks, original_size, mode="bilinear", align_corners=False)
+        masks = F.interpolate(
+            masks, original_size, mode="bilinear", align_corners=False
+        )
         return masks
 
     def preprocess(self, x: torch.Tensor) -> torch.Tensor:
