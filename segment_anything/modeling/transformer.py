@@ -107,7 +107,7 @@ class TwoWayTransformer(nn.Module):
 
 
 class TwoWayAttentionBlock(nn.Module):
-    def __init__(
+    def     __init__(
         self,
         embedding_dim: int,
         num_heads: int,
@@ -198,9 +198,7 @@ class Attention(nn.Module):
         self.embedding_dim = embedding_dim
         self.internal_dim = embedding_dim // downsample_rate
         self.num_heads = num_heads
-        assert (
-            self.internal_dim % num_heads == 0
-        ), "num_heads must divide embedding_dim."
+        assert self.internal_dim % num_heads == 0, "num_heads must divide embedding_dim."
 
         self.q_proj = nn.Linear(embedding_dim, self.internal_dim)
         self.k_proj = nn.Linear(embedding_dim, self.internal_dim)
@@ -219,9 +217,9 @@ class Attention(nn.Module):
 
     def forward(self, q: Tensor, k: Tensor, v: Tensor) -> Tensor:
         # Input projections
-        q = self.q_proj(q.to(self.q_proj.weight.dtype))  # todo
-        k = self.k_proj(k.to(self.k_proj.weight.dtype))  # todo
-        v = self.v_proj(v.to(self.v_proj.weight.dtype))  # todo
+        q = self.q_proj(q.to(self.q_proj.weight.dtype)) #todo
+        k = self.k_proj(k.to(self.k_proj.weight.dtype)) #todo
+        v = self.v_proj(v.to(self.v_proj.weight.dtype)) #todo
 
         # q = self.q_proj(q)
         # k = self.k_proj(k)

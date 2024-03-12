@@ -8,23 +8,11 @@ import torch
 if torch.cuda.is_available():
     try:
         if torch.cuda.get_device_capability()[0] > 7:
-            from flash_attn.flash_attn_interface import (
-                flash_attn_func as _flash_attn_func,
-            )
+            from flash_attn.flash_attn_interface import flash_attn_func as _flash_attn_func
 
-            def flash_attn_func(
-                q, k, v, dropout=0.0, bias=None, softmax_scale=None, is_causal=False
-            ):
+            def flash_attn_func(q, k, v, dropout=0.0, bias=None, softmax_scale=None, is_causal=False):
                 assert bias is None
-                attn, lse, _ = _flash_attn_func(
-                    q,
-                    k,
-                    v,
-                    dropout_p=dropout,
-                    softmax_scale=softmax_scale,
-                    causal=is_causal,
-                    return_attn_probs=True,
-                )
+                attn, lse, _ = _flash_attn_func(q, k, v, dropout_p=dropout, softmax_scale=softmax_scale, causal=is_causal, return_attn_probs=True)
                 return attn, lse
 
         else:
@@ -40,16 +28,7 @@ if torch.cuda.is_available():
             class FlashAttnFunc(torch.autograd.Function):
                 @staticmethod
                 # type: ignore
-                def forward(
-                    ctx,
-                    q,
-                    k,
-                    v,
-                    dropout=0.0,
-                    bias=None,
-                    softmax_scale=None,
-                    is_causal=False,
-                ):
+                def forward(ctx, q, k, v, dropout=0.0, bias=None, softmax_scale=None, is_causal=False):
                     if is_causal:
                         assert bias is None
                         attn_bias = LowerTriangularMask()
@@ -123,9 +102,7 @@ if torch.cuda.is_available():
                         query=query,
                         key=key,
                         value=value,
-                        attn_bias=cls.deserialize_bias(
-                            ctx.attn_bias_ctx, attn_bias_tensor
-                        ),
+                        attn_bias=cls.deserialize_bias(ctx.attn_bias_ctx, attn_bias_tensor),
                         p=ctx.p,
                         scale=ctx.scale,
                     )
@@ -138,7 +115,7 @@ if torch.cuda.is_available():
                         ctx=op_ctx, inp=inp, grad=grad, op=ctx.op_bw
                     )
                     return grads.dq, grads.dk, grads.dv, None, grads.db, None, None
-
+            
             flash_attn_func = FlashAttnFunc.apply
     except ModuleNotFoundError:
         flash_attn_func = None
