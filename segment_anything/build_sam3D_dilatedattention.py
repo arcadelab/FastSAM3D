@@ -87,8 +87,9 @@ def _build_sam3D(
             qkv_bias=True,
             use_rel_pos=True,
             global_attn_indexes=encoder_global_attn_indexes,
-            window_size=14,
+            window_size=0,
             out_chans=prompt_embed_dim,
+            skip_layer = 2,
         ),
         prompt_encoder=PromptEncoder3D(
             embed_dim=prompt_embed_dim,
@@ -142,6 +143,7 @@ def _build_sam3D_ori(
             global_attn_indexes=encoder_global_attn_indexes,
             window_size=14,
             out_chans=prompt_embed_dim,
+            skip_layer = 2,
         ),
         prompt_encoder=PromptEncoder3D(
             embed_dim=prompt_embed_dim,
