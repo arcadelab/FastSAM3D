@@ -11,8 +11,7 @@ import time
 
 from typing import Optional, Tuple, Type
 from segment_anything.modeling.dilated_utils import XPOS, RelativePositionBias
-
-# from zeta.nn.attention.flash_attention import FlashAttention
+#from zeta.nn.attention.flash_attention import FlashAttention
 from flash_attn import flash_attn_qkvpacked_func, flash_attn_func
 
 
@@ -30,8 +29,7 @@ class MLPBlock(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.lin2(self.act(self.lin1(x)))
-
-
+    
 class LayerNorm3d(nn.Module):
     def __init__(self, num_channels: int, eps: float = 1e-6) -> None:
         super().__init__()
@@ -68,9 +66,10 @@ class ImageEncoderViT3D(nn.Module):
         window_size: int = 0,
         input_size: Optional[Tuple[int, int, int]] = None,
         global_attn_indexes: Tuple[int, ...] = (),
-        layeroutput=2,
+        layeroutput = 2,
+        
         # New parameter
-        dilation: int = 1,
+        dilation: int = 1,  
         segment_size: int = 64,
         dropout: float = 0.0,
         causal: bool = False,
@@ -112,36 +111,24 @@ class ImageEncoderViT3D(nn.Module):
         if use_abs_pos:
             # Initialize absolute positional embedding with pretrain image size.
             self.pos_embed = nn.Parameter(
-                torch.zeros(
-                    1,
-                    img_size // patch_size,
-                    img_size // patch_size,
-                    img_size // patch_size,
-                    embed_dim,
-                )
+                torch.zeros(1, img_size // patch_size, img_size // patch_size, img_size // patch_size, embed_dim)
             )
 
         self.blocks = nn.ModuleList()
         for i in range(2):
-            self.blocks.append(
-                Block3D_woatt(
-                    dim=embed_dim,
-                    num_heads=num_heads,
-                    mlp_ratio=mlp_ratio,
-                    qkv_bias=qkv_bias,
-                    norm_layer=norm_layer,
-                    act_layer=act_layer,
-                    use_rel_pos=use_rel_pos,
-                    rel_pos_zero_init=rel_pos_zero_init,
-                    window_size=window_size if i not in global_attn_indexes else 0,
-                    input_size=(
-                        img_size // patch_size,
-                        img_size // patch_size,
-                        img_size // patch_size,
-                    ),
-                )
-            )
-        for i in range(depth - 2):
+            self.blocks.append(Block3D_woatt(
+                dim=embed_dim,
+                num_heads=num_heads,
+                mlp_ratio=mlp_ratio,
+                qkv_bias=qkv_bias,
+                norm_layer=norm_layer,
+                act_layer=act_layer,
+                use_rel_pos=use_rel_pos,
+                rel_pos_zero_init=rel_pos_zero_init,
+                window_size=window_size if i not in global_attn_indexes else 0,
+                input_size=(img_size // patch_size, img_size // patch_size, img_size // patch_size),
+        ))
+        for i in range(depth -2):
             block = Block3D(
                 dim=embed_dim,
                 num_heads=num_heads,
@@ -152,11 +139,7 @@ class ImageEncoderViT3D(nn.Module):
                 use_rel_pos=use_rel_pos,
                 rel_pos_zero_init=rel_pos_zero_init,
                 window_size=window_size if i not in global_attn_indexes else 0,
-                input_size=(
-                    img_size // patch_size,
-                    img_size // patch_size,
-                    img_size // patch_size,
-                ),
+                input_size=(img_size // patch_size, img_size // patch_size, img_size // patch_size),
             )
             self.blocks.append(block)
 
@@ -180,13 +163,14 @@ class ImageEncoderViT3D(nn.Module):
             # nn.LayerNorm(out_chans),
         )
 
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # input_size = [1,1,256,256,256]
         # import IPython; IPython.embed()
         t = time.time()
         listx = []
         x = self.patch_embed(x)
-
+        
         # x = [1,16,16,16,768]
         # import pdb; pdb.set_trace()
         if self.pos_embed is not None:
@@ -195,15 +179,16 @@ class ImageEncoderViT3D(nn.Module):
         i = 0
         for blk in self.blocks:
             i += 1
-            x, x1 = blk(x)
+            x,x1 = blk(x)
             if i % self.layeroutput == 0:
                 listx.append(x1)
-
+            
         # x = [1,16,16,16,768]
         x = self.neck(x.permute(0, 4, 1, 2, 3))
         listx.append(x)
         # output_size = [1,256,16,16,16]
-        return listx, time.time() - t
+        return listx,time.time()-t
+
 
 
 class Block3D(nn.Module):
@@ -222,7 +207,7 @@ class Block3D(nn.Module):
         window_size: int = 0,
         input_size: Optional[Tuple[int, int, int]] = None,
         # New parameter
-        dilation: int = 1,
+        dilation: int = 1,  
         segment_size: int = 64,
         dropout: float = 0.0,
         causal: bool = False,
@@ -231,6 +216,7 @@ class Block3D(nn.Module):
         qk_norm: bool = False,
         dtype: torch.dtype = torch.float32,
         device: str = "cuda:0",
+        
     ):
         super().__init__()
         self.norm1 = norm_layer(dim)
@@ -246,12 +232,11 @@ class Block3D(nn.Module):
             qk_norm=qk_norm,
             dtype=dtype,
             device=device,
-        )
 
-        self.norm2 = norm_layer(dim)
-        self.mlp = MLPBlock(
-            embedding_dim=dim, mlp_dim=int(dim * mlp_ratio), act=act_layer
         )
+       
+        self.norm2 = norm_layer(dim)
+        self.mlp = MLPBlock(embedding_dim=dim, mlp_dim=int(dim * mlp_ratio), act=act_layer)
 
         self.window_size = window_size
 
@@ -260,14 +245,14 @@ class Block3D(nn.Module):
         shortcut = x
         x = self.norm1(x)
         x1 = self.attn(x)
-        # print("x shape",x.shape)
-        # print("x1 shape",x1.shape)
-        # x1 = x1.view(B, D, H, W, C)
+        #print("x shape",x.shape)
+        #print("x1 shape",x1.shape)
+        #x1 = x1.view(B, D, H, W, C)
         x = shortcut + x1
         x = self.norm2(x)
         x = x + self.mlp(x)
 
-        return x, x1
+        return x,x1
 
 
 class Block3D_woatt(nn.Module):
@@ -313,19 +298,16 @@ class Block3D_woatt(nn.Module):
         # )
 
         self.norm2 = norm_layer(dim)
-        self.mlp = MLPBlock(
-            embedding_dim=dim, mlp_dim=int(dim * mlp_ratio), act=act_layer
-        )
+        self.mlp = MLPBlock(embedding_dim=dim, mlp_dim=int(dim * mlp_ratio), act=act_layer)
 
         self.window_size = window_size
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.norm2(x)
-
+        
         x = x + self.mlp(x)
 
-        return x, None
-
+        return x,None
 
 # add alibi, qk layer norm, one write head, multihway,
 class DilatedAttention(nn.Module):
@@ -357,7 +339,7 @@ class DilatedAttention(nn.Module):
         self.device = device
         self.qkv = nn.Linear(dim, dim * 3, bias=True)
         # self.seqlen=512 #(8*8*8)
-
+        
         # self.attention = FlashAttention(causal=self.causal, dropout=dropout).to(
         #     device
         # )
@@ -371,17 +353,20 @@ class DilatedAttention(nn.Module):
 
         self.norm = nn.LayerNorm(dim)
         self.proj = nn.Linear(dim, dim)
-
+        
         self.proj_q = nn.Linear(dim, dim)
         self.proj_k = nn.Linear(dim, dim)
         self.proj_v = nn.Linear(dim, dim)
 
         # head offsets
-        # self.head_offsets = nn.Parameter(torch.randn(heads, dim))
+        #self.head_offsets = nn.Parameter(torch.randn(heads, dim))
 
+        
     def get_mask(self, i, j):
         """i = row, j=column"""
-        return torch.ones((i, j), device=self.device, dtype=torch.bool).triu(j - i + 2)
+        return torch.ones((i, j), device=self.device, dtype=torch.bool).triu(
+            j - i + 2
+        )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Forward pass of the DilatedAttention module.
@@ -393,27 +378,23 @@ class DilatedAttention(nn.Module):
             torch.Tensor: The output tensor.
         """
         batch_size, depth, height, width, _ = x.shape
-        x_dilated = x[
-            :, :: self.dilation_rate, :: self.dilation_rate, :: self.dilation_rate, :
-        ]
+        x_dilated = x[:, ::self.dilation_rate, ::self.dilation_rate, ::self.dilation_rate, :]
         _, d_dilated, h_dilated, w_dilated, _ = x_dilated.shape
         padding_depth = depth - d_dilated
         padding_height = height - h_dilated
         padding_width = width - w_dilated
-        x = F.pad(
-            x_dilated, (0, 0, 0, padding_width, 0, padding_height, 0, padding_depth)
-        )
+        x = F.pad(x_dilated, (0, 0, 0, padding_width, 0, padding_height, 0, padding_depth))
         qkv = self.qkv(x)
         new_seq_length = depth * height * width
         qkv = qkv.reshape(batch_size, new_seq_length, 3, self.heads, -1)
         qkv = qkv.half()
-        attn = flash_attn_qkvpacked_func(
-            qkv, dropout_p=0.0, softmax_scale=None, causal=False
-        )
+        attn = flash_attn_qkvpacked_func(qkv, dropout_p=0.0, softmax_scale=None, causal=False)
         attn_output = attn.float()
         attn_output = attn_output.view(batch_size, depth, height, width, -1)
-        x = attn_output
+        x=attn_output
         return x
+
+
 
 
 class PatchEmbed3D(nn.Module):
@@ -448,3 +429,5 @@ class PatchEmbed3D(nn.Module):
         # B C X Y Z -> B X Y Z C
         x = x.permute(0, 2, 3, 4, 1)
         return x
+
+

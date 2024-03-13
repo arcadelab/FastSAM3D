@@ -30,7 +30,6 @@ from torch.nn.init import trunc_normal_
 from .functional import na3d_av, na3d_qk_with_bias
 from flash_attn import flash_attn_qkvpacked_func, flash_attn_func
 
-
 class NeighborhoodAttention3D(nn.Module):
     """
     Neighborhood Attention 3D Module
@@ -106,7 +105,7 @@ class NeighborhoodAttention3D(nn.Module):
             padding_w = max(0, self.window_size - W_padded)
             x = pad(x, (0, 0, 0, padding_w, 0, padding_h))
             _, D_padded, H_padded, W_padded, _ = x.shape
-
+        
         qkv = (
             self.qkv(x)
             .reshape(B, D_padded, H_padded, W_padded, 3, self.num_heads, self.head_dim)

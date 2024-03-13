@@ -18,7 +18,9 @@ class StableAdamWUnfused(torch.optim.Optimizer):
         custom_scalar=65536,
     ):
         beta1, beta2 = betas[0], betas[1]
-        defaults = dict(lr=lr, weight_decay=weight_decay, beta1=beta1, beta2=beta2)
+        defaults = dict(
+            lr=lr, weight_decay=weight_decay, beta1=beta1, beta2=beta2
+        )
         super(StableAdamWUnfused, self).__init__(params, defaults)
 
         self.eps = eps
@@ -68,8 +70,12 @@ class StableAdamWUnfused(torch.optim.Optimizer):
                     v = param_state["exp_avg"]
                     u = param_state["exp_avg_sq"]
 
-                beta1hat = beta1 * (1 - beta1 ** (step - 1)) / (1 - beta1**step)
-                beta2hat = beta2 * (1 - beta2 ** (step - 1)) / (1 - beta2**step)
+                beta1hat = (
+                    beta1 * (1 - beta1 ** (step - 1)) / (1 - beta1**step)
+                )
+                beta2hat = (
+                    beta2 * (1 - beta2 ** (step - 1)) / (1 - beta2**step)
+                )
 
                 v = v.mul_(beta1hat).add_(g, alpha=1.0 - beta1hat)
                 u = u.mul_(beta2hat).addcmul_(g, g, value=1.0 - beta2hat)
@@ -107,7 +113,9 @@ class RelativePositionBias(nn.Module):
         self.num_buckets = num_buckets
         self.max_distance = max_distance
         self.n_heads = n_heads
-        self.relative_attention_bias = nn.Embedding(self.num_buckets, self.n_heads)
+        self.relative_attention_bias = nn.Embedding(
+            self.num_buckets, self.n_heads
+        )
 
     @staticmethod
     def _relative_position_bucket(
@@ -150,7 +158,9 @@ class RelativePositionBias(nn.Module):
             dtype=torch.long,
             device=self.relative_attention_bias.weight.device,
         )[None, :]
-        relative_position = memory_position - context_position  # shape (qlen, klen)
+        relative_position = (
+            memory_position - context_position
+        )  # shape (qlen, klen)
 
         rp_bucket = self._relative_position_bucket(
             relative_position,  # shape (qlen, klen)
@@ -159,8 +169,12 @@ class RelativePositionBias(nn.Module):
             max_distance=self.max_distance,
         )
         rp_bucket = rp_bucket.to(self.relative_attention_bias.weight.device)
-        values = self.relative_attention_bias(rp_bucket)  # shape (qlen, klen, heads)
-        values = values.permute([2, 0, 1]).unsqueeze(0)  # shape (1, heads, qlen, klen)
+        values = self.relative_attention_bias(
+            rp_bucket
+        )  # shape (qlen, klen, heads)
+        values = values.permute([2, 0, 1]).unsqueeze(
+            0
+        )  # shape (1, heads, qlen, klen)
         return values
 
     def forward(self, batch_size, qlen, klen, step=None):
@@ -185,7 +199,9 @@ def rotate_every_two(x):
     x1 = x[:, :, ::2]
     x2 = x[:, :, 1::2]
     x = torch.stack((-x2, x1), dim=-1)
-    return x.flatten(-2)  # in einsum notation: rearrange(x, '... d j -> ... (d j)')\
+    return x.flatten(
+        -2
+    )  # in einsum notation: rearrange(x, '... d j -> ... (d j)')\
 
 
 def duplicate_interleave(m):
@@ -246,7 +262,9 @@ def SparsifyIndices(
 
     print(f"x.size 1st: {x.shape} and xdtype: {x.dtype}")
 
-    x_indices = torch.arange(0, n, dtype=torch.long, device=x.device)[None, :, None]
+    x_indices = torch.arange(0, n, dtype=torch.long, device=x.device)[
+        None, :, None
+    ]
     print(f"X indices dtype: {x_indices.shape} and dtype: {x.dtype}")
 
     num_subatt = sum([int(math.ceil(n / w)) for w in ws])
@@ -301,9 +319,12 @@ def MixOutputs(
     a_indices: torch.Tensor,
 ) -> torch.Tensor:
     print(f"Input 'a_os' shape: {a_os.shape} and dtype: {a_os.dtype}")
-    print(f"Input 'a_denoms' shape: {a_denoms.shape} and dtype: {a_denoms.dtype}")
     print(
-        f"Input 'a_indices' shape: {a_indices.shape} and dtype:" f" {a_indices.dtype}"
+        f"Input 'a_denoms' shape: {a_denoms.shape} and dtype: {a_denoms.dtype}"
+    )
+    print(
+        f"Input 'a_indices' shape: {a_indices.shape} and dtype:"
+        f" {a_indices.dtype}"
     )
 
     # Ensure the source tensor has the same dtype as the target tensor before the scatter operation

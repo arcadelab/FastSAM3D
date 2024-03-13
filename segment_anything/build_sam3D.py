@@ -10,7 +10,6 @@ from functools import partial
 
 from .modeling import ImageEncoderViT3D, MaskDecoder3D, PromptEncoder3D, Sam3D
 
-
 def build_sam3D_vit_h(checkpoint=None):
     return _build_sam3D(
         encoder_embed_dim=1280,
@@ -44,7 +43,6 @@ def build_sam3D_vit_b(checkpoint=None):
         checkpoint=checkpoint,
     )
 
-
 def build_sam3D_vit_b_ori(checkpoint=None):
     return _build_sam3D_ori(
         encoder_embed_dim=768,
@@ -64,6 +62,7 @@ sam_model_registry3D = {
 }
 
 
+
 def _build_sam3D(
     encoder_embed_dim,
     encoder_depth,
@@ -72,7 +71,7 @@ def _build_sam3D(
     checkpoint=None,
 ):
     prompt_embed_dim = 384
-    image_size = 256  #
+    image_size = 256 #
     vit_patch_size = 16
     image_embedding_size = image_size // vit_patch_size
     sam = Sam3D(
@@ -92,11 +91,7 @@ def _build_sam3D(
         ),
         prompt_encoder=PromptEncoder3D(
             embed_dim=prompt_embed_dim,
-            image_embedding_size=(
-                image_embedding_size,
-                image_embedding_size,
-                image_embedding_size,
-            ),
+            image_embedding_size=(image_embedding_size, image_embedding_size, image_embedding_size),
             input_image_size=(image_size, image_size, image_size),
             mask_in_chans=16,
         ),
@@ -145,11 +140,7 @@ def _build_sam3D_ori(
         ),
         prompt_encoder=PromptEncoder3D(
             embed_dim=prompt_embed_dim,
-            image_embedding_size=(
-                image_embedding_size,
-                image_embedding_size,
-                image_embedding_size,
-            ),
+            image_embedding_size=(image_embedding_size, image_embedding_size, image_embedding_size),
             input_image_size=(image_size, image_size, image_size),
             mask_in_chans=16,
         ),

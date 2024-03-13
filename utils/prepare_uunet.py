@@ -1,11 +1,11 @@
 # -*- encoding: utf-8 -*-
-"""
+'''
 @File    :   prepare_data_from_nnUNet.py
 @Time    :   2023/12/10 23:07:39
 @Author  :   Haoyu Wang 
 @Contact :   small_dark@sina.com
 @Brief   :   pre-process nnUNet-style dataset into SAM-Med3D-style
-"""
+'''
 
 import os.path as osp
 import os
@@ -15,14 +15,7 @@ import nibabel as nib
 from tqdm import tqdm
 import torchio as tio
 
-
-def resample_nii(
-    input_path: str,
-    output_path: str,
-    target_spacing: tuple = (1.5, 1.5, 1.5),
-    n=None,
-    reference_image=None,
-):
+def resample_nii(input_path: str, output_path: str, target_spacing: tuple = (1.5, 1.5, 1.5), n=None, reference_image=None):
     """
     Resample a nii.gz file to a specified spacing using torchio.
 
@@ -31,17 +24,19 @@ def resample_nii(
     - output_path: Path to save the resampled .nii.gz file.
     - target_spacing: Desired spacing for resampling. Default is (1.5, 1.5, 1.5).
     """
-
+    
     # Load the nii.gz file using torchio
-    subject = tio.Subject(img=tio.ScalarImage(input_path))
+    subject = tio.Subject(
+        img=tio.ScalarImage(input_path)
+    )
 
     # Resample the image to the target spacing
     resampler = tio.Resample(target=target_spacing)
     resampled_subject = resampler(subject)
-    if n != None:
+    if(n!=None):
         image = resampled_subject.img
         tensor_data = image.data
-        if isinstance(n, int):
+        if(isinstance(n, int)):
             n = [n]
         for ni in n:
             tensor_data[tensor_data == ni] = -1
@@ -55,13 +50,14 @@ def resample_nii(
         save_image = cropper_or_padder(save_image)
     else:
         save_image = resampled_subject.img
-
+    
     # Save the resampled image to the specified output path
     save_image.save(output_path)
 
-
 dataset_root = "data/initial_train_dataset"
-dataset_list = ["brats"]
+dataset_list = [
+    'brats'
+]
 
 target_dir = "/content/drive/MyDrive/lighting_sam_3d/data/process_train_data/brats"
 
@@ -70,10 +66,10 @@ for dataset in dataset_list:
     dataset_dir = osp.join(dataset_root, dataset)
     meta_info = json.load(open(osp.join(dataset_dir, "dataset.json")))
     print(meta_info.keys())
-    print(meta_info["name"], meta_info["modality"])
-    num_classes = len(meta_info["labels"]) - 1
+    print(meta_info['name'], meta_info['modality'])
+    num_classes = len(meta_info["labels"])-1
     print("num_classes:", num_classes, meta_info["labels"])
-    resample_dir = osp.join(dataset_dir, "imagesTr")
+    resample_dir = osp.join(dataset_dir, "imagesTr") 
     os.makedirs(resample_dir, exist_ok=True)
     # print(len(meta_info["training"]), "is found")
     for idx, cls_name in meta_info["labels"].items():
@@ -90,37 +86,31 @@ for dataset in dataset_list:
             img = osp.join(dataset_dir, img)
             gt = osp.join(dataset_dir, gt)
             resample_img = osp.join(resample_dir, osp.basename(img))
-            if not osp.exists(resample_img):
+            if(not osp.exists(resample_img)):
                 resample_nii(img, resample_img)
             img = resample_img
 
-            target_img_path = osp.join(
-                target_img_dir, osp.basename(img).replace("_0000.nii.gz", ".nii.gz")
-            )
+            target_img_path = osp.join(target_img_dir, osp.basename(img).replace("_0000.nii.gz", ".nii.gz"))
             # print(f"{img}->{target_img}")
-            target_gt_path = osp.join(
-                target_gt_dir, osp.basename(gt).replace("_0000.nii.gz", ".nii.gz")
-            )
+            target_gt_path = osp.join(target_gt_dir, osp.basename(gt).replace("_0000.nii.gz", ".nii.gz"))
             # print(f"{gt}->{target_gt_path}")
 
-            gt_img = nib.load(gt)
-            spacing = tuple(gt_img.header["pixdim"][1:4])
+            gt_img = nib.load(gt)       
+            spacing = tuple(gt_img.header['pixdim'][1:4])
             # Calculate the product of the spacing values
             spacing_voxel = spacing[0] * spacing[1] * spacing[2]
             gt_arr = gt_img.get_fdata()
             gt_arr[gt_arr != idx] = 0
             gt_arr[gt_arr != 0] = 1
-            volume = gt_arr.sum() * spacing_voxel
+            volume = gt_arr.sum()*spacing_voxel
             # print("volume:", volume)
-            if volume < 10:
+            if(volume<10): 
                 print("skip", target_img_path)
                 continue
             # if(not osp.exists(target_gt_path)):
             reference_image = tio.ScalarImage(img)
-            if meta_info["name"] == "kits23" and idx == 1:
-                resample_nii(
-                    gt, target_gt_path, n=[1, 2, 3], reference_image=reference_image
-                )
+            if(meta_info['name']=="kits23" and idx==1):
+                resample_nii(gt, target_gt_path, n=[1,2,3], reference_image=reference_image)
             else:
                 resample_nii(gt, target_gt_path, n=idx, reference_image=reference_image)
             shutil.copy(img, target_img_path)

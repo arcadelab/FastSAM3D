@@ -1,23 +1,10 @@
 <p align="center">
-    <h1 align="center">FastSAM3D</h1>
+    <h1 align="center">FASTSAM3D-V1</h1>
 </p>
+<div align="center">
+  <img src="asserts/model.png">
+</div>
 
-<br><!-- TABLE OF CONTENTS -->
-<details>
-  <summary>Table of Contents</summary><br>
-
-- [ Overview](#-overview)
-- [ Features](#-features)
-- [ Repository Structure](#-repository-structure)
-- [ Modules](#-modules)
-- [ Getting Started](#-getting-started)
-  - [ Installation](#-installation)
-  - [ Usage](#-usage)
-- [ Contributing](#-contributing)
-- [ License](#-license)
-- [ Acknowledgments](#-acknowledgments)
-</details>
-<hr>
 
 ## Overview
 
@@ -25,7 +12,6 @@ FastSAM3D is an efficient "Segment Anything Model" (SAM) designed for 3D volumet
 
 
 ---
-
 ## Features
 
 - **High-Speed Inference**: Achieves rapid inference on 128x128x128 volumetric images in just 8 milliseconds when using an NVIDIA A100 GPU.
@@ -155,7 +141,10 @@ Below are the links to the checkpoints for FastSAM3D and its fine-tuned version:
 | FASTSAM3D            | [Download](https://drive.google.com/uc?export=download&id=1vmtqWzERvnGVwZVSSMpw_fE0zGHL_4QP) |
 
 ---
-
+##  Visualize
+<div align="center">
+  <img src="asserts/visualize.png">
+</div>
 ##  Contributing
 
 Contributions are welcome! Here are several ways you can contribute:
@@ -187,7 +176,17 @@ Contributions are welcome! Here are several ways you can contribute:
    ```
 7. **Submit a Pull Request**: Create a PR against the original project repository. Clearly describe the changes and their motivations.
 8. **Review**: Once your PR is reviewed and approved, it will be merged into the main branch. Congratulations on your contribution!
+</details>
 
+<details closed>
+<summary>Contributor Graph</summary>
+<br>
+<p align="center">
+   <a href="https://github.com{/skill-diver/FastSAM3D-v1/}graphs/contributors">
+      <img src="https://contrib.rocks/image?repo=skill-diver/FastSAM3D-v1">
+   </a>
+</p>
+</details>
 
 ---
 
