@@ -1,5 +1,5 @@
 <p align="center">
-    <h1 align="center">FASTSAM3D-V1</h1>
+    <h1 align="center">FastSAM3D</h1>
 </p>
 <div align="center">
   <img src="asserts/model.png">
