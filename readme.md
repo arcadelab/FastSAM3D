@@ -1,5 +1,5 @@
 <p align="center">
-    <h1 align="center">FastSAM3D</h1>
+    <h1 align="center">FastSAM3D: An Efficient Segment Anything Model for 3D Volumetric Medical Images </h1>
 </p>
 <div align="center">
   <img src="asserts/model.png">
