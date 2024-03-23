@@ -10,6 +10,7 @@
 
 FastSAM3D is an efficient "Segment Anything Model" (SAM) designed for 3D volumetric medical images, aiming to achieve zero-shot generalization capability through interactive cues. The model significantly reduces inference time and computational cost through a novel layer-by-layer asymptotic distillation method and a 3D sparse lightning attention mechanism. FastSAM3D achieves inference on 128x128x128 volumetric images within 8 ms on NVIDIA A100 GPUs, which is 527.38x faster compared to 2D SAMs, and 8.75x faster than 3D SAMs while maintaining no significant performance degradation.
 
+Link: https://arxiv.org/abs/2403.09827
 
 ---
 ## Features
