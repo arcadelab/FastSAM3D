@@ -196,6 +196,20 @@ This project is protected under the [Apache 2.0 license](LICENSE).
 
 ---
 
+## Citation
+
+```
+@misc{shen2024fastsam3d,
+      title={FastSAM3D: An Efficient Segment Anything Model for 3D Volumetric Medical Images}, 
+      author={Yiqing Shen and Jingxing Li and Xinyuan Shao and Blanca Inigo Romillo and Ankush Jindal and David Dreizin and Mathias Unberath},
+      year={2024},
+      eprint={2403.09827},
+      archivePrefix={arXiv},
+      primaryClass={eess.IV}
+}
+```
+---
+
 ##  Acknowledgement
 - Thanks to the open-source of the following projects:
   - [Segment Anything](https://github.com/facebookresearch/segment-anything) &#8194;
