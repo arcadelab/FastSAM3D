@@ -44,6 +44,14 @@ def build_sam3D_vit_b(checkpoint=None):
     )
 
 def build_sam3D_vit_b_ori(checkpoint=None):
+    return _build_sam3D_fast(
+        encoder_embed_dim=768,
+        encoder_depth=12,
+        encoder_num_heads=12,
+        encoder_global_attn_indexes=[2, 5, 8, 11],
+        checkpoint=checkpoint,
+    )
+def build_sam3D_vit_b_original(checkpoint=None):
     return _build_sam3D_ori(
         encoder_embed_dim=768,
         encoder_depth=12,
@@ -52,14 +60,13 @@ def build_sam3D_vit_b_ori(checkpoint=None):
         checkpoint=checkpoint,
     )
 
-
 sam_model_registry3D = {
     "default": build_sam3D_vit_h,
     "vit_h": build_sam3D_vit_h,
     "vit_l": build_sam3D_vit_l,
     "vit_b": build_sam3D_vit_b,
     "vit_b_ori": build_sam3D_vit_b_ori,
-    "vit_b_fast":build_sam3D_vit_b_fast,
+    "vit_b_original":build_sam3D_vit_b_original,
 }
 
 
