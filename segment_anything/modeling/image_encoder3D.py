@@ -61,7 +61,7 @@ class ImageEncoderViT3D(nn.Module):
         window_size: int = 0,
         global_attn_indexes: Tuple[int, ...] = (),
         layeroutput = 2,
-        skip_layer = 6
+        skip_layer = 2
     ) -> None:
         """
         Args:
