@@ -152,8 +152,8 @@ class ImageEncoderViT3D(nn.Module):
         # import IPython; IPython.embed()
         t = time.time()
         listx = []
-        print(x.shape)  
-        print(self.pos_embed.shape)  
+        # print(x.shape)  
+        # print(self.pos_embed.shape)  
         x = self.patch_embed(x)
         
         # x = [1,16,16,16,768]
