@@ -100,21 +100,21 @@ Link: https://arxiv.org/abs/2403.09827
 
 <h4>From <code>source</code></h4>
 
-1.Prepare Your Training Data (from nnU-Net-style dataset): 
+> 1.Prepare Your Training Data (from nnU-Net-style dataset): 
 
-Ensure that your training data is organized according to the structure shown in the `data/medical_preprocessed` directories. The target file structures should be like the following:
-```
-data/medical_preprocessed
-      ├── adrenal
-      │ ├── ct_WORD
-      │ │ ├── imagesTr
-      │ │ │ ├── word_0025.nii.gz
-      │ │ │ ├── ...
-      │ │ ├── labelsTr
-      │ │ │ ├── word_0025.nii.gz
-      │ │ │ ├── ...
-      ├── ...
-```
+> Ensure that your training data is organized according to the structure shown in the `data/medical_preprocessed` directories. The target file structures should be like the following:
+> ```
+> data/medical_preprocessed
+>       ├── adrenal
+>       │ ├── ct_WORD
+>       │ │ ├── imagesTr
+>       │ │ │ ├── word_0025.nii.gz
+>       │ │ │ ├── ...
+>       │ │ ├── labelsTr
+>       │ │ │ ├── word_0025.nii.gz
+>       │ │ │ ├── ...
+>       ├── ...
+> ```
 
 > If the original data are in the **nnU-Net style**, follow these steps:
 > 
@@ -150,14 +150,14 @@ data/medical_preprocessed
 >       ├── ...
 > ```
 
-Then, modify the `utils/data_paths.py` according to your own data.
-```
-img_datas = [
-"data/train/adrenal/ct_WORD",
-"data/train/liver/ct_WORD",
-...
-]
-```
+> Then, modify the `utils/data_paths.py` according to your own data.
+> ```
+> img_datas = [
+> "data/train/adrenal/ct_WORD",
+> "data/train/liver/ct_WORD",
+> ...
+> ]
+> ```
 
 
 > 2. **Train the Teacher Model and Prepare Labels**
