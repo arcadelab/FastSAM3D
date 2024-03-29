@@ -100,7 +100,7 @@ Link: https://arxiv.org/abs/2403.09827
 
 <h4>From <code>source</code></h4>
 
-Prepare Your Training Data (from nnU-Net-style dataset): 
+1.Prepare Your Training Data (from nnU-Net-style dataset): 
 
 Ensure that your training data is organized according to the structure shown in the `data/medical_preprocessed` directories. The target file structures should be like the following:
 ```
@@ -160,7 +160,7 @@ img_datas = [
 ```
 
 
-> 1. **Train the Teacher Model and Prepare Labels**
+> 2. **Train the Teacher Model and Prepare Labels**
 >
 >    Use the command below to train the teacher model and prepare labels for guided distillation to the student model, and put your data and checkpoint in the corresponding position of the shell script:
 >    ```console
@@ -175,14 +175,14 @@ img_datas = [
 >
 >    ```
 >
-> 5. **Validate the Teacher Model**
+> 4. **Validate the Teacher Model**
 >
 >    Validate the teacher model using the command below, and put your data and checkpoint in the corresponding position of shell script:
 >    ```console
 >    $ ./infer.sh
 >    ```
 >
-> 7. **Validate the Student Model**
+> 5. **Validate the Student Model**
 >
 >    Finally, to validate the student model after distillation, and put your data and checkpoint in the corresponding position of the shell script:
 >    ```console
