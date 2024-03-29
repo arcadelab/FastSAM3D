@@ -173,7 +173,7 @@ class ImageEncoderViT3D(nn.Module):
         x = self.neck(x.permute(0, 4, 1, 2, 3))
         listx.append(x)
         # output_size = [1,256,16,16,16]
-        return listx,time.time()-t
+        return listx
 
 
 class Block3D(nn.Module):
