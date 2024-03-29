@@ -100,6 +100,66 @@ Link: https://arxiv.org/abs/2403.09827
 
 <h4>From <code>source</code></h4>
 
+Prepare Your Training Data (from nnU-Net-style dataset): 
+
+Ensure that your training data is organized according to the structure shown in the `data/medical_preprocessed` directories. The target file structures should be like the following:
+```
+data/medical_preprocessed
+      ├── adrenal
+      │ ├── ct_WORD
+      │ │ ├── imagesTr
+      │ │ │ ├── word_0025.nii.gz
+      │ │ │ ├── ...
+      │ │ ├── labelsTr
+      │ │ │ ├── word_0025.nii.gz
+      │ │ │ ├── ...
+      ├── ...
+```
+
+> If the original data are in the **nnU-Net style**, follow these steps:
+> 
+> For a nnU-Net style dataset, the original file structure should be:
+> ```
+> Task010_WORD
+>      ├── imagesTr
+>      │ ├── word_0025_0000.nii.gz
+>      │ ├── ...
+>      ├── labelsTr
+>      │ ├── word_0025.nii.gz
+>      │ ├── ...
+> ```
+> > Then you should resample and convert the masks into binary. (You can use [script](https://github.com/arcadelab/FastSAM3D/blob/main/utils/prepare_uunet.py) for nnU-Net folder)
+> ```
+> data/train
+>       ├── adrenal
+>       │ ├── ct_WORD
+>       │ │ ├── imagesTr
+>       │ │ │ ├── word_0025.nii.gz
+>       │ │ │ ├── ...
+>       │ │ ├── labelsTr
+>       │ │ │ ├── word_0025.nii.gz (binary label)
+>       │ │ │ ├── ...
+>       ├── liver
+>       │ ├── ct_WORD
+>       │ │ ├── imagesTr
+>       │ │ │ ├── word_0025.nii.gz
+>       │ │ │ ├── ...
+>       │ │ ├── labelsTr
+>       │ │ │ ├── word_0025.nii.gz (binary label)
+>       │ │ │ ├── ...
+>       ├── ...
+> ```
+
+Then, modify the `utils/data_paths.py` according to your own data.
+```
+img_datas = [
+"data/train/adrenal/ct_WORD",
+"data/train/liver/ct_WORD",
+...
+]
+```
+
+
 > 1. **Train the Teacher Model and Prepare Labels**
 >
 >    Use the command below to train the teacher model and prepare labels for guided distillation to the student model, and put your data and checkpoint in the corresponding position of the shell script:
