@@ -1,4 +1,4 @@
-python ./preparelabel.py.py \
+python ./preparelabel.py \
   --data_validation_path "./data/validation" \
   --label_path_base "./data/augmentation/label" \
   --train_path_base "./data/augmentation/images" \
