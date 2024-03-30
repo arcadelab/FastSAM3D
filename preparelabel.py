@@ -11,7 +11,7 @@ import numpy as np
 import argparse
 
 parser = argparse.ArgumentParser(description='Store labels for augmented data.')
-parser.add_argument('--data_validation_path', type=str, default='./data/validation', help='Path to the validation data')
+parser.add_argument('--data_validation_path', type=str, default='./data/train', help='Path to the teacher encoder to generate logits')
 parser.add_argument('--label_path_base', type=str, default='./data/augumentation/label', help='Base path for saving labels')
 parser.add_argument('--train_path_base', type=str, default='./data/augumentation/images', help='Base path for saving training images')
 parser.add_argument('--checkpoint_path', type=str, default='./ckpt/sam_med3d_turbo.pth', help='Path to the model checkpoint')
