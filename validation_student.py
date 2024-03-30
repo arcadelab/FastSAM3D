@@ -31,7 +31,8 @@ import nibabel as nib
 parser = argparse.ArgumentParser()
 parser.add_argument('-tdp', '--test_data_path', type=str, default='/content/drive/MyDrive/paper_visual_results/totalseg') #
 parser.add_argument('-vp', '--vis_path', type=str, default='/content/drive/MyDrive/paper_visual_results/totalseg0441')  #
-parser.add_argument('-cp', '--checkpoint_path', type=str, default="work_dir/finetune/sam_model_latest.pth")
+parser.add_argument('-cp', '--checkpoint_path', type=str, default="work_dir/finetune/sam_model_latest.pth")    # model check point download from provided ckpt link
+parser.add_argument('-tp','--tiny_vit_checkpoint', type=str, default='ckpt/6layers6heads_student', help='Path to the image encoder checkpoint') # download from provided ckpt link
 parser.add_argument('-sn', '--save_name', type=str, default='/content/drive/MyDrive/paper_visual_results/totalseg0041.py/') #
 
 parser.add_argument('--image_size', type=int, default=128)
@@ -371,7 +372,7 @@ if __name__ == "__main__":
         args.sam_checkpoint = args.checkpoint_path
         sam_model_tune = sam_model_registry[args.model_type](args).to(device)
     #change checkpoint here
-    tiny_vit_checkpoint_path = '' # You could load your own encoder weight here
+    tiny_vit_checkpoint_path = args.tiny_vit_checkpoint # Load image encoder weight here, download form the checkpoint link
     tiny_vit =  ImageEncoderViT3D(                                    
             depth=6,
             embed_dim=768,
