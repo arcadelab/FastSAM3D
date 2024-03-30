@@ -121,7 +121,6 @@ class BaseTrainer:
         self.seg_loss = DiceCELoss(sigmoid=True, squared_pred=True, reduction='mean')
     
     def freeze_encoder_layers(self):
-        # 如果使用了DDP包装，则需要访问原始模型
         if isinstance(self.model, torch.nn.parallel.DistributedDataParallel):
             encoder = self.model.module.image_encoder
         else:
