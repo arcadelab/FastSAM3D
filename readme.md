@@ -160,7 +160,7 @@ Link: https://arxiv.org/abs/2403.09827
 > ```
 
 
-> 2. **Train the Teacher Model and Prepare Labels**
+> 2. **Train the Teacher Model and Prepare Labels(logits)**
 >
 >    Use the command below to train the teacher model and prepare labels for guided distillation to the student model, and put your data and checkpoint in the corresponding position of the shell script:
 >    ```console
