@@ -37,7 +37,6 @@ Link: https://arxiv.org/abs/2403.09827
     ├── infer_sam.sh
     ├── prepare_label.sh
     ├── preparelabel.py
-    ├── preparelabel1.py
     ├── requirements.txt
     ├── segment_anything
     │   ├── __init__.py
