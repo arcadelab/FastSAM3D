@@ -200,7 +200,7 @@ Below are the links to the checkpoints for FastSAM3D and its fine-tuned version:
 | Finetuned-SAMMED3D  | [Download](https://drive.google.com/file/d/1bL-Q1zxYGwjBylnC9QmXRL-WhST3ti2T/view?usp=sharing) |
 | FASTSAM3D            | [Download](https://drive.google.com/uc?export=download&id=1vmtqWzERvnGVwZVSSMpw_fE0zGHL_4QP) |
 
-Below is the link of teacher model weights:
+Below is the link of teacher model weight:
 
 | Model                | Download Link |
 |----------------------|---------------|
