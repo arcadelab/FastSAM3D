@@ -371,7 +371,7 @@ if __name__ == "__main__":
         args.sam_checkpoint = args.checkpoint_path
         sam_model_tune = sam_model_registry[args.model_type](args).to(device)
     #change checkpoint here
-    tiny_vit_checkpoint_path = './ckpt/6layer6head2skip_logits.pth'  
+    tiny_vit_checkpoint_path = args.checkpoint_path  
     tiny_vit =  ImageEncoderViT3D(                                    
             depth=6,
             embed_dim=768,
