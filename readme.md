@@ -196,7 +196,7 @@ Below are the links to the checkpoints for FastSAM3D and its fine-tuned version:
 
 | Model                | Download Link |
 |----------------------|---------------|
-| Image encoder of FASTSAM3D Checkpoint   | [Download](https://drive.google.com/file/d/1-rvRh1VYeBSWmAqNUS-9lKomtiaNXCL8/view?usp=sharing) |
+| Image encoder checkpoint of FASTSAM3D   | [Download](https://drive.google.com/file/d/1-rvRh1VYeBSWmAqNUS-9lKomtiaNXCL8/view?usp=sharing) |
 | Finetuned-SAMMED3D  | [Download](https://drive.google.com/file/d/1bL-Q1zxYGwjBylnC9QmXRL-WhST3ti2T/view?usp=sharing) |
 | FASTSAM3D            | [Download](https://drive.google.com/uc?export=download&id=1vmtqWzERvnGVwZVSSMpw_fE0zGHL_4QP) |
 
