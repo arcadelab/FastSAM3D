@@ -5,6 +5,9 @@
   <img src="asserts/model.png">
 </div>
 
+## update 
+We have developed a 3D slicer extension for FastSAM3D and also SAMMed3D
+link: https://github.com/arcadelab/FastSAM3D_slicer
 
 ## Overview
 
