@@ -541,17 +541,3 @@ class PatchEmbed3D(nn.Module):
         # B C X Y Z -> B X Y Z C
         x = x.permute(0, 2, 3, 4, 1)
         return x
-
-
-# def main():
-#     # 创建ImageEncoderViT3D模型实例
-#     model = ImageEncoderViT3D()
-
-#     # 设定输入尺寸为(1, 256, 256, 256)
-#     input_size = (1, 256, 256, 256)
-
-#     # 打印模型结构
-#     summary(model, input_size)
-
-# if __name__ == "__main__":
-#     main()
