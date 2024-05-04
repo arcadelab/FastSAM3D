@@ -76,7 +76,7 @@ if __name__ == "__main__":
         shuffle=True
     )
     device = args.device
-    sam_model_tune = sam_model_registry3D['vit_b_original'](checkpoint=None).to(device)
+    sam_model_tune = sam_model_registry3D['vit_b_ori'](checkpoint=None).to(device)
     model_dict = torch.load(args.checkpoint_path, map_location=device)
     state_dict = model_dict['model_state_dict']
     sam_model_tune.load_state_dict(state_dict)
