@@ -98,7 +98,7 @@ def build_model(args):
             img_size=128,
             mlp_ratio=4,
             norm_layer=partial(torch.nn.LayerNorm, eps=1e-6),
-            num_heads=8,
+            num_heads=6,
             patch_size=16,
             qkv_bias=True,
             use_rel_pos=True,
@@ -108,12 +108,12 @@ def build_model(args):
         ))
     else:
         model = ImageEncoderViT3D(
-            depth=12,
+            depth=6,
             embed_dim=768,
             img_size=128,
             mlp_ratio=4,
             norm_layer=partial(torch.nn.LayerNorm, eps=1e-6),
-            num_heads=8,
+            num_heads=6,
             patch_size=16,
             qkv_bias=True,
             use_rel_pos=True,
