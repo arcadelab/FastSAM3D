@@ -20,7 +20,7 @@ import pickle
 from utils.click_method import get_next_click3D_torch_ritm, get_next_click3D_torch_2
 from utils.data_loader import Dataset_Union_ALL_Val
 import time
-from segment_anything.modeling.image_encoder3D_c import ImageEncoderViT3D  #
+from segment_anything.modeling.image_encoder3D import ImageEncoderViT3D  #
 from thop import profile
 from torchinfo import summary
 #from fvcore.nn import FlopCountAnalysis            
