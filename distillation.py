@@ -290,7 +290,8 @@ class BaseTrainer:
 
                 with amp.autocast():
                     output = self.model(image3D)
-                    loss = self.seg_loss(output[self.curlayer], label[self.curlayer])
+                    loss = self.seg_loss(output[-1], label[-1])
+                    #loss = self.seg_loss(output[self.curlayer], label[self.curlayer]) #distill between layers, and set self.curlayer to the number you want to distill
                 
                 epoch_loss += loss.item()
 
