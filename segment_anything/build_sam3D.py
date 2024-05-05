@@ -193,7 +193,7 @@ def _build_sam3D_fast(
             global_attn_indexes=encoder_global_attn_indexes,
             window_size=14,
             out_chans=prompt_embed_dim,
-            skip_layer = 2,
+            skip_layer = 0, # default is 0.
         ),
         prompt_encoder=PromptEncoder3D(
             embed_dim=prompt_embed_dim,
