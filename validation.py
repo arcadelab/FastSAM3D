@@ -29,7 +29,7 @@ parser.add_argument('-sn', '--save_name', type=str, default='results/FastSAM3D.p
 parser.add_argument('--image_size', type=int, default=1024)  #
 parser.add_argument('--crop_size', type=int, default=128)
 parser.add_argument('--device', type=str, default='cuda')
-parser.add_argument('-mt', '--model_type', type=str, default='vit_b_ori')
+parser.add_argument('-mt', '--model_type', type=str, default='vit_b_original')
 parser.add_argument('-nc', '--num_clicks', type=int, default=10)
 parser.add_argument('-pm', '--point_method', type=str, default='default')
 parser.add_argument('-dt', '--data_type', type=str, default='Tr')
