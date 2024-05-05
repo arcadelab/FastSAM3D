@@ -138,7 +138,19 @@ class distillation_data(Dataset):
         for i in range(0,len(label)):
             label[i] = label[i].detach()
         return image.detach(), label
-
+        
+    # If you meet in place copy problem, you could use this _get_item_ method.
+    # def __getitem__(self, index):
+    #     image = torch.load(self.image_paths[index])
+    #     label = torch.load(self.label_paths[index])
+    #     detached_labels = []
+    #     for i in range(0,len(label)):
+    #         detached_labels.append(label[i].detach())
+    #         #label[i] = label[i].detach()
+    #         #label[i] = label[i].clone().detach()
+    #     label = detached_labels
+    #     return image.detach(), label
+        
     def _set_file_paths(self):
         self.image_paths = []
         self.label_paths = []
