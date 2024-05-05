@@ -265,12 +265,12 @@ def finetune_model_predict3D(tiny_vit,img3D, gt3D, sam_model_tune, device='cuda'
 
 
     with torch.no_grad():
-        image_embedding,times = tiny_vit(img3D.to(device))
+        image_embedding = tiny_vit(img3D.to(device))
     image_embedding = image_embedding[-1] # (1, 384, 16, 16, 16)
     print(profile(tiny_vit,(img3D.to(device),))[0]) # FLOPs for image encoder part
     input_size = (1,128,128,128)
-    encoder_time = times
-    print(times) #
+    encoder_time = time
+    #print(time) #
     memory_before = torch.cuda.max_memory_allocated(device)
     print(memory_before) #
     torch.cuda.reset_max_memory_allocated(device)
