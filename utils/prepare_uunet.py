@@ -1,12 +1,3 @@
-# -*- encoding: utf-8 -*-
-'''
-@File    :   prepare_data_from_nnUNet.py
-@Time    :   2023/12/10 23:07:39
-@Author  :   Haoyu Wang 
-@Contact :   small_dark@sina.com
-@Brief   :   pre-process nnUNet-style dataset into SAM-Med3D-style
-'''
-
 import os.path as osp
 import os
 import json
