@@ -5,7 +5,7 @@ import shutil
 import nibabel as nib
 from tqdm import tqdm
 import torchio as tio
-
+#change resolution and space 
 def resample_nii(input_path: str, output_path: str, target_spacing: tuple = (1.5, 1.5, 1.5), n=None, reference_image=None):
     """
     Resample a nii.gz file to a specified spacing using torchio.
