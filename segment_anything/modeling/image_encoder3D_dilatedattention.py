@@ -8,12 +8,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import time
-
 from typing import Optional, Tuple, Type
-from segment_anything.modeling.dilated_utils import XPOS, RelativePositionBias
-#from zeta.nn.attention.flash_attention import FlashAttention
 from flash_attn import flash_attn_qkvpacked_func, flash_attn_func
 
+from torchsummary import summary
 
 class MLPBlock(nn.Module):
     def __init__(
@@ -44,8 +42,6 @@ class LayerNorm3d(nn.Module):
         x = self.weight[:, None, None, None] * x + self.bias[:, None, None, None]
         return x
 
-
-# This class and its supporting functions below lightly adapted from the ViTDet backbone available at: https://github.com/facebookresearch/detectron2/blob/main/detectron2/modeling/backbone/vit.py # noqa
 class ImageEncoderViT3D(nn.Module):
     def __init__(
         self,
@@ -64,39 +60,10 @@ class ImageEncoderViT3D(nn.Module):
         use_rel_pos: bool = False,
         rel_pos_zero_init: bool = True,
         window_size: int = 0,
-        input_size: Optional[Tuple[int, int, int]] = None,
         global_attn_indexes: Tuple[int, ...] = (),
         layeroutput = 2,
-        
-        # New parameter
-        dilation: int = 1,  
-        segment_size: int = 64,
-        dropout: float = 0.0,
-        causal: bool = False,
-        use_xpos: bool = False,
-        use_rel_pos_bias: bool = False,
-        qk_norm: bool = False,
-        dtype: torch.dtype = torch.float32,
-        device: str = "cuda:0",
+        skip_layer = 2,
     ) -> None:
-        """
-        Args:
-            img_size (int): Input image size.
-            patch_size (int): Patch size.
-            in_chans (int): Number of input image channels.
-            embed_dim (int): Patch embedding dimension.
-            depth (int): Depth of ViT.
-            num_heads (int): Number of attention heads in each ViT block.
-            mlp_ratio (float): Ratio of mlp hidden dim to embedding dim.
-            qkv_bias (bool): If True, add a learnable bias to query, key, value.
-            norm_layer (nn.Module): Normalization layer.
-            act_layer (nn.Module): Activation layer.
-            use_abs_pos (bool): If True, use absolute positional embeddings.
-            use_rel_pos (bool): If True, add relative positional embeddings to the attention map.
-            rel_pos_zero_init (bool): If True, zero initialize relative positional parameters.
-            window_size (int): Window size for window attention blocks.
-            global_attn_indexes (list): Indexes for blocks using global attention.
-        """
         super().__init__()
         self.img_size = img_size
         self.layeroutput = layeroutput
@@ -109,13 +76,13 @@ class ImageEncoderViT3D(nn.Module):
 
         self.pos_embed: Optional[nn.Parameter] = None
         if use_abs_pos:
-            # Initialize absolute positional embedding with pretrain image size.
             self.pos_embed = nn.Parameter(
                 torch.zeros(1, img_size // patch_size, img_size // patch_size, img_size // patch_size, embed_dim)
             )
 
         self.blocks = nn.ModuleList()
-        for i in range(2):
+
+        for i in range(skip_layer):
             self.blocks.append(Block3D_woatt(
                 dim=embed_dim,
                 num_heads=num_heads,
@@ -128,7 +95,7 @@ class ImageEncoderViT3D(nn.Module):
                 window_size=window_size if i not in global_attn_indexes else 0,
                 input_size=(img_size // patch_size, img_size // patch_size, img_size // patch_size),
         ))
-        for i in range(depth -2):
+        for i in range(depth - skip_layer):
             block = Block3D(
                 dim=embed_dim,
                 num_heads=num_heads,
@@ -140,6 +107,15 @@ class ImageEncoderViT3D(nn.Module):
                 rel_pos_zero_init=rel_pos_zero_init,
                 window_size=window_size if i not in global_attn_indexes else 0,
                 input_size=(img_size // patch_size, img_size // patch_size, img_size // patch_size),
+                dilation=4,
+                segment_size=64,
+                dropout=0.0,
+                causal=False,
+                use_xpos=False,
+                use_rel_pos_bias=False,
+                qk_norm=False,
+                dtype=torch.float32,
+                device="cuda:0",
             )
             self.blocks.append(block)
 
@@ -150,7 +126,6 @@ class ImageEncoderViT3D(nn.Module):
                 kernel_size=1,
                 bias=False,
             ),
-            # nn.LayerNorm(out_chans),
             LayerNorm3d(out_chans),
             nn.Conv3d(
                 out_chans,
@@ -160,40 +135,28 @@ class ImageEncoderViT3D(nn.Module):
                 bias=False,
             ),
             LayerNorm3d(out_chans),
-            # nn.LayerNorm(out_chans),
         )
 
-
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # input_size = [1,1,256,256,256]
-        # import IPython; IPython.embed()
         t = time.time()
         listx = []
         x = self.patch_embed(x)
         
-        # x = [1,16,16,16,768]
-        # import pdb; pdb.set_trace()
         if self.pos_embed is not None:
             x = x + self.pos_embed
         listx.append(x)
         i = 0
         for blk in self.blocks:
-            i += 1
-            x,x1 = blk(x)
-            if i % self.layeroutput == 0:
-                listx.append(x1)
+            x = blk(x)
             
-        # x = [1,16,16,16,768]
         x = self.neck(x.permute(0, 4, 1, 2, 3))
         listx.append(x)
-        # output_size = [1,256,16,16,16]
-        return listx,time.time()-t
-
+        end_time=time.time() - t
+        print("encoder time:",end_time)
+        return listx
 
 
 class Block3D(nn.Module):
-    """Transformer blocks with support of window attention and residual propagation blocks"""
-
     def __init__(
         self,
         dim: int,
@@ -206,8 +169,7 @@ class Block3D(nn.Module):
         rel_pos_zero_init: bool = True,
         window_size: int = 0,
         input_size: Optional[Tuple[int, int, int]] = None,
-        # New parameter
-        dilation: int = 1,  
+        dilation: int = 4,  
         segment_size: int = 64,
         dropout: float = 0.0,
         causal: bool = False,
@@ -216,14 +178,17 @@ class Block3D(nn.Module):
         qk_norm: bool = False,
         dtype: torch.dtype = torch.float32,
         device: str = "cuda:0",
-        
-    ):
+    ) -> None:
         super().__init__()
         self.norm1 = norm_layer(dim)
-        self.attn = DilatedAttention(
+        self.attn = Attention(
             dim=dim,
-            heads=num_heads,
-            dilation_rate=dilation,
+            num_heads=num_heads,
+            qkv_bias=qkv_bias,
+            use_rel_pos=use_rel_pos,
+            rel_pos_zero_init=rel_pos_zero_init,
+            input_size=input_size if window_size == 0 else (window_size, window_size, window_size),
+            dilation=dilation,
             segment_size=segment_size,
             dropout=dropout,
             causal=causal,
@@ -232,12 +197,9 @@ class Block3D(nn.Module):
             qk_norm=qk_norm,
             dtype=dtype,
             device=device,
-
         )
-       
         self.norm2 = norm_layer(dim)
         self.mlp = MLPBlock(embedding_dim=dim, mlp_dim=int(dim * mlp_ratio), act=act_layer)
-
         self.window_size = window_size
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -245,19 +207,13 @@ class Block3D(nn.Module):
         shortcut = x
         x = self.norm1(x)
         x1 = self.attn(x)
-        #print("x shape",x.shape)
-        #print("x1 shape",x1.shape)
-        #x1 = x1.view(B, D, H, W, C)
         x = shortcut + x1
         x = self.norm2(x)
         x = x + self.mlp(x)
-
-        return x,x1
+        return x
 
 
 class Block3D_woatt(nn.Module):
-    """Transformer blocks with support of window attention and residual propagation blocks"""
-
     def __init__(
         self,
         dim: int,
@@ -271,129 +227,154 @@ class Block3D_woatt(nn.Module):
         window_size: int = 0,
         input_size: Optional[Tuple[int, int, int]] = None,
     ) -> None:
-        """
-        Args:
-            dim (int): Number of input channels.
-            num_heads (int): Number of attention heads in each ViT block.
-            mlp_ratio (float): Ratio of mlp hidden dim to embedding dim.
-            qkv_bias (bool): If True, add a learnable bias to query, key, value.
-            norm_layer (nn.Module): Normalization layer.
-            act_layer (nn.Module): Activation layer.
-            use_rel_pos (bool): If True, add relative positional embeddings to the attention map.
-            rel_pos_zero_init (bool): If True, zero initialize relative positional parameters.
-            window_size (int): Window size for window attention blocks. If it equals 0, then
-                use global attention.
-            input_size (tuple(int, int) or None): Input resolution for calculating the relative
-                positional parameter size.
-        """
         super().__init__()
-        # self.norm1 = norm_layer(dim)
-        # self.attn = Attention(
-        #     dim,
-        #     num_heads=num_heads,
-        #     qkv_bias=qkv_bias,
-        #     use_rel_pos=use_rel_pos,
-        #     rel_pos_zero_init=rel_pos_zero_init,
-        #     input_size=input_size if window_size == 0 else (window_size, window_size, window_size),
-        # )
-
         self.norm2 = norm_layer(dim)
         self.mlp = MLPBlock(embedding_dim=dim, mlp_dim=int(dim * mlp_ratio), act=act_layer)
-
         self.window_size = window_size
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.norm2(x)
-        
         x = x + self.mlp(x)
+        return x
+        
 
-        return x,None
-
-# add alibi, qk layer norm, one write head, multihway,
-class DilatedAttention(nn.Module):
+class Attention(nn.Module):
     def __init__(
         self,
         dim: int,
-        heads: int,
-        dilation_rate: int,
-        segment_size: int,
-        dropout: float = 0.0,
-        causal: bool = False,
-        use_xpos: bool = False,
-        use_rel_pos_bias: bool = False,
-        qk_norm: bool = False,
-        dtype: torch.dtype = torch.float32,
-        device: str = "cuda:0",
+        num_heads: int = 8,
+        qkv_bias: bool = True,
+        use_rel_pos: bool = False,
+        rel_pos_zero_init: bool = True,
+        input_size: Optional[Tuple[int, int, int]] = None,
+        dilation: int = 4,
+        segment_size: int = 64,
+        dropout: float = 0.0,  
+        causal: bool = False,  
+        use_xpos: bool = False,  
+        use_rel_pos_bias: bool = False,  
+        qk_norm: bool = False,  
+        dtype: torch.dtype = torch.float32,  
+        device: str = "cuda:0",  
     ) -> None:
-        super(DilatedAttention, self).__init__()
-        self.dim = dim
-        self.heads = heads
-        self.dilation_rate = dilation_rate
-        self.segment_size = segment_size
-        self.dropout = nn.Dropout(dropout)
-        self.causal = causal
-        self.use_xpos = use_xpos
-        self.use_rel_pos_bias = use_rel_pos_bias
-        self.qk_norm = qk_norm
-        self.dtype = dtype
-        self.device = device
-        self.qkv = nn.Linear(dim, dim * 3, bias=True)
-        # self.seqlen=512 #(8*8*8)
-        
-        # self.attention = FlashAttention(causal=self.causal, dropout=dropout).to(
-        #     device
-        # )
+        super().__init__()
+        self.num_heads = num_heads
+        head_dim = dim // num_heads
+        self.scale = head_dim**-0.5
 
-        if use_xpos:
-            self.xpos = XPOS(head_dim=dim // heads)
-        if use_rel_pos_bias:
-            self.relative_bias = RelativePositionBias(
-                num_buckets=32, max_distance=128, n_heads=heads
-            )
-
-        self.norm = nn.LayerNorm(dim)
+        self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
         self.proj = nn.Linear(dim, dim)
-        
-        self.proj_q = nn.Linear(dim, dim)
-        self.proj_k = nn.Linear(dim, dim)
-        self.proj_v = nn.Linear(dim, dim)
 
-        # head offsets
-        #self.head_offsets = nn.Parameter(torch.randn(heads, dim))
+        self.use_rel_pos = use_rel_pos
+        if self.use_rel_pos:
+            assert (
+                input_size is not None
+            ), "Input size must be provided if using relative positional encoding."
+            self.rel_pos_d = nn.Parameter(torch.zeros(2 * input_size[0] - 1, head_dim))
+            self.rel_pos_h = nn.Parameter(torch.zeros(2 * input_size[1] - 1, head_dim))
+            self.rel_pos_w = nn.Parameter(torch.zeros(2 * input_size[2] - 1, head_dim))
 
-        
-    def get_mask(self, i, j):
-        """i = row, j=column"""
-        return torch.ones((i, j), device=self.device, dtype=torch.bool).triu(
-            j - i + 2
-        )
+        self.dilation = dilation
+        self.segment_size = segment_size
+        self.dropout = dropout  
+        self.causal = causal  
+        self.use_xpos = use_xpos  
+        self.use_rel_pos_bias = use_rel_pos_bias  
+        self.qk_norm = qk_norm  
+        self.dtype = dtype  
+        self.device = device 
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Forward pass of the DilatedAttention module.
-
-        Args:
-            x (torch.Tensor): The input tensor.
-
-        Returns:
-            torch.Tensor: The output tensor.
-        """
-        batch_size, depth, height, width, _ = x.shape
-        x_dilated = x[:, ::self.dilation_rate, ::self.dilation_rate, ::self.dilation_rate, :]
-        _, d_dilated, h_dilated, w_dilated, _ = x_dilated.shape
-        padding_depth = depth - d_dilated
-        padding_height = height - h_dilated
-        padding_width = width - w_dilated
-        x = F.pad(x_dilated, (0, 0, 0, padding_width, 0, padding_height, 0, padding_depth))
+        B, D, H, W, _ = x.shape
+        seqlen = D * H * W
         qkv = self.qkv(x)
-        new_seq_length = depth * height * width
-        qkv = qkv.reshape(batch_size, new_seq_length, 3, self.heads, -1)
-        qkv = qkv.half()
-        attn = flash_attn_qkvpacked_func(qkv, dropout_p=0.0, softmax_scale=None, causal=False)
-        attn_output = attn.float()
-        attn_output = attn_output.view(batch_size, depth, height, width, -1)
-        x=attn_output
+        segments = qkv.view(B, seqlen, 3, self.num_heads, -1)
+        sparse_segments = [segments[:, i::self.segment_size] for i in range(self.segment_size)] 
+        attn_outputs = []
+        for segment in sparse_segments:
+            attn_output = flash_attn_qkvpacked_func(segment.half(), dropout_p=self.dropout, softmax_scale=None, causal=self.causal)
+            attn_outputs.append(attn_output.float())
+        
+        attn_output = torch.cat(attn_outputs, dim=1).view(B, D, H, W, -1)
+        x = self.proj(attn_output)
         return x
 
+
+def window_partition3D(x: torch.Tensor, window_size: int) -> Tuple[torch.Tensor, Tuple[int, int, int]]:
+    B, D, H, W, C = x.shape
+
+    pad_d = (window_size - D % window_size) % window_size
+    pad_h = (window_size - H % window_size) % window_size
+    pad_w = (window_size - W % window_size) % window_size
+    
+    if pad_h > 0 or pad_w > 0 or pad_d > 0:
+        x = F.pad(x, (0, 0, 0, pad_w, 0, pad_h, 0, pad_d))
+    Hp, Wp, Dp = H + pad_h, W + pad_w, D + pad_d
+
+    x = x.view(B, Dp // window_size, window_size, Hp // window_size, window_size, Wp // window_size, window_size, C)
+    windows = x.permute(0, 1, 3, 5, 2, 4, 6, 7).contiguous().view(-1, window_size, window_size, window_size, C)
+    return windows, (Dp, Hp, Wp)
+
+
+def window_unpartition3D(windows: torch.Tensor, window_size: int, pad_dhw: Tuple[int, int, int], dhw: Tuple[int, int, int]) -> torch.Tensor:
+    Dp, Hp, Wp = pad_dhw
+    D, H, W = dhw
+    B = windows.shape[0] // (Dp * Hp * Wp // window_size // window_size // window_size)
+    x = windows.view(B, Dp // window_size, Hp // window_size, Wp // window_size, window_size, window_size, window_size, -1)
+    x = x.permute(0, 1, 4, 2, 5, 3, 6, 7).contiguous().view(B, Hp, Wp, Dp, -1)
+
+    if Hp > H or Wp > W or Dp > D:
+        x = x[:, :D, :H, :W, :].contiguous()
+    return x
+
+
+def get_rel_pos(q_size: int, k_size: int, rel_pos: torch.Tensor) -> torch.Tensor:
+    max_rel_dist = int(2 * max(q_size, k_size) - 1)
+    if rel_pos.shape[0] != max_rel_dist:
+        rel_pos_resized = F.interpolate(
+            rel_pos.reshape(1, rel_pos.shape[0], -1).permute(0, 2, 1),
+            size=max_rel_dist,
+            mode="linear",
+        )
+        rel_pos_resized = rel_pos_resized.reshape(-1, max_rel_dist).permute(1, 0)
+    else:
+        rel_pos_resized = rel_pos
+
+    q_coords = torch.arange(q_size)[:, None] * max(k_size / q_size, 1.0)
+    k_coords = torch.arange(k_size)[None, :] * max(q_size / k_size, 1.0)
+    relative_coords = (q_coords - k_coords) + (k_size - 1) * max(q_size / k_size, 1.0)
+
+    return rel_pos_resized[relative_coords.long()]
+
+
+def add_decomposed_rel_pos(
+    attn: torch.Tensor,
+    q: torch.Tensor,
+    rel_pos_d: torch.Tensor,
+    rel_pos_h: torch.Tensor,
+    rel_pos_w: torch.Tensor,
+    q_size: Tuple[int, int, int],
+    k_size: Tuple[int, int, int],
+) -> torch.Tensor:
+    q_d, q_h, q_w = q_size
+    k_d, k_h, k_w = k_size
+
+    Rd = get_rel_pos(q_d, k_d, rel_pos_d)
+    Rh = get_rel_pos(q_h, k_h, rel_pos_h)
+    Rw = get_rel_pos(q_w, k_w, rel_pos_w)
+    
+    B, _, dim = q.shape
+    r_q = q.reshape(B, q_d, q_h, q_w, dim)
+
+    rel_d = torch.einsum("bdhwc,dkc->bdhwk", r_q, Rd)
+    rel_h = torch.einsum("bdhwc,hkc->bdhwk", r_q, Rh)
+    rel_w = torch.einsum("bdhwc,wkc->bdhwk", r_q, Rw)
+    
+    attn = (
+        attn.view(B, q_d, q_h, q_w, k_d, k_h, k_w) + rel_d[:, :, :, :, None, None] + rel_h[:, :, :, None, :, None] + rel_w[:, :, :,None,None, :]
+    ).view(B, q_d * q_h * q_w, k_d * k_h * k_w)
+
+    return attn
 
 
 
@@ -429,5 +410,3 @@ class PatchEmbed3D(nn.Module):
         # B C X Y Z -> B X Y Z C
         x = x.permute(0, 2, 3, 4, 1)
         return x
-
-
