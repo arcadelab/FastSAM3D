@@ -270,9 +270,7 @@ class Attention(nn.Module):
         print("attn shape",attn.shape)
         print("v shape",v.shape)
         attn_out = attn.transpose(2, 3).contiguous().view(batch_size, seq_len, -1)  # B, S, (N*H)
-
-        # 如果需要，通过一个线性层调整维度
-        # 假设self.out_proj是一个线性层，已经在__init__中以适当的输出维度初始化
+        # rearrage to embedd dimensions
         attn_out = self.out_proj(attn_out)  # B, S, embedding_dim
         return attn_out
     
