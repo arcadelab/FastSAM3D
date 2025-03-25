@@ -131,7 +131,7 @@ Link: https://arxiv.org/abs/2403.09827
 >      │ ├── word_0025.nii.gz
 >      │ ├── ...
 > ```
-> > Then you should resample and convert the masks into binary. (You can use [script](https://github.com/arcadelab/FastSAM3D/blob/main/utils/prepare_uunet.py) for nnU-Net folder)
+> Then you should resample and convert the masks into binary. (You can use [script](https://github.com/arcadelab/FastSAM3D/blob/main/utils/prepare_uunet.py) for nnU-Net folder)
 > ```
 > data/train
 >       ├── adrenal
