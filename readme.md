@@ -180,14 +180,14 @@ Link: https://arxiv.org/abs/2403.09827
 >
 > 4. **Validate the Teacher Model**
 >
->    Validate the teacher model using the command below, and put your data and teacher model(download from the link we provided) checkpoint in the corresponding position of shell script:
+>    Validate the teacher model using the command below, and put your data and teacher model (link below) checkpoint in the corresponding position of shell script:
 >    ```console
 >    $ ./validation.sh
 >    ```
 >
 > 5. **Validate our FastSAM3D model, or your distilled student model**
 >
->    Finally, to validate the student model after distillation, and put your data, teacher model, FastSAM3D model checkpoint(download from the link we provided) in the corresponding position of the shell script:
+>    Finally, to validate the student model after distillation, and put your data, teacher model, FastSAM3D model checkpoint(link below) in the corresponding position of the shell script:
 >    ```console
 >    $ ./validation_student.sh
 >    ```
