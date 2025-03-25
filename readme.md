@@ -182,7 +182,7 @@ Link: https://arxiv.org/abs/2403.09827
 >
 >    Validate the teacher model using the command below, and put your data and checkpoint in the corresponding position of shell script:
 >    ```console
->    $ ./infer.sh
+>    $ ./validation.sh
 >    ```
 >
 > 5. **Validate the Student Model**
