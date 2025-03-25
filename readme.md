@@ -185,7 +185,7 @@ Link: https://arxiv.org/abs/2403.09827
 >    $ ./validation.sh
 >    ```
 >
-> 5. **Validate the Student Model**
+> 5. **Validate our FastSAM3D model, or your distilled student model**
 >
 >    Finally, to validate the student model after distillation, and put your data and checkpoint in the corresponding position of the shell script:
 >    ```console
