@@ -201,6 +201,7 @@ Below are the links to the checkpoints for FastSAM3D and its fine-tuned version:
 | Model                | Download Link |
 |----------------------|---------------|
 | FASTSAM3D            | [Download](https://huggingface.co/techlove/FastSAM3D/tree/main) |
+| Teacher Model        | [Download](https://huggingface.co/blueyo0/SAM-Med3D/blob/main/sam_med3d_turbo.pth) |
 
 ---
 ##  Visualize
