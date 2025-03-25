@@ -31,8 +31,8 @@ import nibabel as nib
 parser = argparse.ArgumentParser()
 parser.add_argument('-tdp', '--test_data_path', type=str, default='/content/drive/MyDrive/paper_visual_results/totalseg') #
 parser.add_argument('-vp', '--vis_path', type=str, default='/content/drive/MyDrive/paper_visual_results/totalseg0441')  #
-parser.add_argument('-cp', '--checkpoint_path', type=str, default="work_dir/finetune/sam_model_latest.pth")    # model check point download from provided ckpt link
-parser.add_argument('-tp','--tiny_vit_checkpoint', type=str, default='ckpt/6layers6heads_student', help='Path to the image encoder checkpoint') # download from provided ckpt link
+parser.add_argument('-cp', '--checkpoint_path', type=str, default="work_dir/finetune/sam_model_latest.pth")    # Teacher model ckpt download from provided ckpt link
+parser.add_argument('-tp','--tiny_vit_checkpoint', type=str, default='ckpt/6layers6heads_student', help='Path to the image encoder checkpoint') # FastSAM3D model ckpt download from provided ckpt link
 parser.add_argument('-sn', '--save_name', type=str, default='/content/drive/MyDrive/paper_visual_results/totalseg0041.py/') #
 
 parser.add_argument('--image_size', type=int, default=128)
